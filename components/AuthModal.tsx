@@ -2,8 +2,10 @@
 
 import { KeyRound, LoaderCircle, Mail, ShieldCheck, X } from 'lucide-react';
 import { FormEvent, useEffect, useState } from 'react';
+import type { SiteLanguage } from '@/lib/site-language';
 
 export type AuthProvider = 'official' | 'community';
+export type { SiteLanguage } from '@/lib/site-language';
 
 type OfficialIdentity = {
   displayName: string;
@@ -14,10 +16,110 @@ type AuthModalProps = {
   provider: AuthProvider;
   communityReady?: boolean;
   initialError?: string;
+  language: SiteLanguage;
+  onAuthenticated: () => void;
+  onProviderChange: (provider: AuthProvider) => void;
   onClose: () => void;
 };
 
-export function AuthModal({ provider, communityReady = false, initialError = '', onClose }: AuthModalProps) {
+const modalCopy = {
+  'zh-CN': {
+    close: '关闭登录窗口',
+    tabs: '登录方式',
+    communityTab: '社区登录',
+    officialTab: '游戏登录',
+    officialTitle: '官方账号绑定',
+    communityTitle: '社区账号绑定',
+    description: 'Mod 站账号与社区账号、游戏账号分开管理。',
+    completeTitle: '绑定完成',
+    completePrefix: '以后可使用已绑定的',
+    completeSuffix: '进入 Mod 站。',
+    complete: '完成',
+    verifiedPrefix: '已认证：',
+    communityAccount: '社区账号',
+    bindEmail: '绑定邮箱',
+    bindEmailPlaceholder: '用于接收验证码',
+    sending: '发送中…',
+    resend: '重新发送',
+    sendCode: '发送验证码',
+    emailCode: '邮箱验证码',
+    emailCodePlaceholder: '输入邮箱中的 6 位验证码',
+    bindingHint: '验证码有效期 10 分钟。邮箱只用于绑定 Mod 站账号，不能直接用邮箱注册或登录。',
+    binding: '绑定中…',
+    registerAndBind: '注册并绑定',
+    communityAuthTitle: '使用社区账号认证',
+    communityAuthDescription: '通过 VintageStory Connect 授权后，再填写绑定邮箱并验证邮箱验证码。',
+    authorizeCommunity: '前往社区授权',
+    gameAccount: '游戏账号',
+    gameAccountPlaceholder: 'VintageStory 账号邮箱',
+    gamePassword: '游戏密码',
+    gamePasswordPlaceholder: 'VintageStory 账号密码',
+    totp: '二步验证码',
+    totpPlaceholder: '输入 6 位验证码',
+    verifying: '验证中…',
+    verifyOfficial: '验证官方账号',
+    officialProvider: 'VintageStory 官方账号',
+    communityProvider: 'Discourse 社区账号',
+    officialAuthFailed: '官方认证失败，请重试。',
+    bindingFailed: '绑定失败，请重试。',
+    activationRequired: '请先向绑定邮箱发送验证码。',
+    emailRequired: '请先输入绑定邮箱。',
+    activationFailed: '验证码发送失败，请重试。'
+  },
+  en: {
+    close: 'Close sign-in dialog',
+    tabs: 'Sign-in method',
+    communityTab: 'Community sign-in',
+    officialTab: 'Game sign-in',
+    officialTitle: 'Bind official account',
+    communityTitle: 'Bind community account',
+    description: 'Your Mod DB account is separate from your community and game accounts.',
+    completeTitle: 'Binding complete',
+    completePrefix: 'You can now use the linked',
+    completeSuffix: 'to enter Mod DB.',
+    complete: 'Done',
+    verifiedPrefix: 'Verified: ',
+    communityAccount: 'Community account',
+    bindEmail: 'Binding email',
+    bindEmailPlaceholder: 'Used to receive the verification code',
+    sending: 'Sending…',
+    resend: 'Send again',
+    sendCode: 'Send code',
+    emailCode: 'Email verification code',
+    emailCodePlaceholder: 'Enter the 6-digit code from your email',
+    bindingHint: 'The code expires in 10 minutes. Email is only used to bind your Mod DB account; it cannot be used to sign up or sign in directly.',
+    binding: 'Binding…',
+    registerAndBind: 'Register and bind',
+    communityAuthTitle: 'Authenticate with your community account',
+    communityAuthDescription: 'Authorize through VintageStory Connect, then enter a binding email and verify its code.',
+    authorizeCommunity: 'Authorize with community',
+    gameAccount: 'Game account',
+    gameAccountPlaceholder: 'VintageStory account email',
+    gamePassword: 'Game password',
+    gamePasswordPlaceholder: 'VintageStory account password',
+    totp: 'Two-step verification code',
+    totpPlaceholder: 'Enter the 6-digit code',
+    verifying: 'Verifying…',
+    verifyOfficial: 'Verify official account',
+    officialProvider: 'VintageStory official account',
+    communityProvider: 'Discourse community account',
+    officialAuthFailed: 'Official authentication failed. Please try again.',
+    bindingFailed: 'Binding failed. Please try again.',
+    activationRequired: 'Send a verification code to the binding email first.',
+    emailRequired: 'Enter a binding email first.',
+    activationFailed: 'The verification code could not be sent. Please try again.'
+  }
+} as const;
+
+export function AuthModal({
+  provider,
+  communityReady = false,
+  initialError = '',
+  language,
+  onAuthenticated,
+  onProviderChange,
+  onClose
+}: AuthModalProps) {
   const [officialStage, setOfficialStage] = useState<'verify' | 'bind' | 'success'>('verify');
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
@@ -36,6 +138,7 @@ export function AuthModal({ provider, communityReady = false, initialError = '',
   const isBinding = provider === 'community' ? communityReady : officialStage === 'bind';
   const isSuccess = bindComplete;
   const activationReady = Boolean(sentEmail && sentEmail === bindEmail.trim().toLowerCase());
+  const text = modalCopy[language];
 
   useEffect(() => {
     if (cooldownSeconds <= 0) return;
@@ -44,6 +147,17 @@ export function AuthModal({ provider, communityReady = false, initialError = '',
     }, 1000);
     return () => window.clearInterval(timer);
   }, [cooldownSeconds]);
+
+  useEffect(() => {
+    setOfficialStage('verify');
+    setIdentity(null);
+    setBindEmail('');
+    setActivationCode('');
+    setSentEmail('');
+    setCooldownSeconds(0);
+    setError(initialError);
+    setBindComplete(false);
+  }, [provider, initialError]);
 
   const parseError = async (response: Response, fallback: string) => {
     try {
@@ -66,11 +180,11 @@ export function AuthModal({ provider, communityReady = false, initialError = '',
         body: JSON.stringify({ account, password, totpCode, preLoginToken })
       });
       if (!response.ok) {
-        const payload = await parseError(response, '官方认证失败，请重试。');
+        const payload = await parseError(response, text.officialAuthFailed);
         if (payload.code === 'VS_TOTP_REQUIRED') {
           setPreLoginToken(payload.preLoginToken ?? '');
         }
-        throw new Error(payload.message ?? '官方认证失败，请重试。');
+        throw new Error(payload.message ?? text.officialAuthFailed);
       }
       const payload = (await response.json()) as { identity: OfficialIdentity };
       setIdentity(payload.identity);
@@ -78,7 +192,7 @@ export function AuthModal({ provider, communityReady = false, initialError = '',
       setPassword('');
       setTotpCode('');
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '官方认证失败，请重试。');
+      setError(reason instanceof Error ? reason.message : text.officialAuthFailed);
     } finally {
       setBusy(false);
     }
@@ -88,7 +202,7 @@ export function AuthModal({ provider, communityReady = false, initialError = '',
     event.preventDefault();
     if (busy) return;
     if (!activationReady) {
-      setError('请先向绑定邮箱发送验证码。');
+      setError(text.activationRequired);
       return;
     }
     setBusy(true);
@@ -100,13 +214,14 @@ export function AuthModal({ provider, communityReady = false, initialError = '',
         body: JSON.stringify({ bindEmail, activationCode })
       });
       if (!response.ok) {
-        const payload = await parseError(response, '绑定失败，请重试。');
-        throw new Error(payload.message ?? '绑定失败，请重试。');
+        const payload = await parseError(response, text.bindingFailed);
+        throw new Error(payload.message ?? text.bindingFailed);
       }
       setOfficialStage('success');
       setBindComplete(true);
+      onAuthenticated();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '绑定失败，请重试。');
+      setError(reason instanceof Error ? reason.message : text.bindingFailed);
     } finally {
       setBusy(false);
     }
@@ -116,7 +231,7 @@ export function AuthModal({ provider, communityReady = false, initialError = '',
     if (busy || sendBusy || cooldownSeconds > 0) return;
     const normalizedEmail = bindEmail.trim().toLowerCase();
     if (!normalizedEmail) {
-      setError('请先输入绑定邮箱。');
+      setError(text.emailRequired);
       return;
     }
     setSendBusy(true);
@@ -128,15 +243,15 @@ export function AuthModal({ provider, communityReady = false, initialError = '',
         body: JSON.stringify({ bindEmail: normalizedEmail })
       });
       if (!response.ok) {
-        const payload = await parseError(response, '验证码发送失败，请重试。');
-        throw new Error(payload.message ?? '验证码发送失败，请重试。');
+        const payload = await parseError(response, text.activationFailed);
+        throw new Error(payload.message ?? text.activationFailed);
       }
       const payload = (await response.json()) as { retryAfterSeconds?: number };
       setSentEmail(normalizedEmail);
       setActivationCode('');
       setCooldownSeconds(payload.retryAfterSeconds ?? 60);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '验证码发送失败，请重试。');
+      setError(reason instanceof Error ? reason.message : text.activationFailed);
     } finally {
       setSendBusy(false);
     }
@@ -146,39 +261,60 @@ export function AuthModal({ provider, communityReady = false, initialError = '',
     window.location.assign('/api/auth/community/login?returnTo=/');
   }
 
-  const title = provider === 'official' ? '官方账号绑定' : '社区账号绑定';
-  const providerLabel = provider === 'official' ? 'VintageStory 官方账号' : 'Discourse 社区账号';
+  const title = provider === 'official' ? text.officialTitle : text.communityTitle;
+  const providerLabel = provider === 'official' ? text.officialProvider : text.communityProvider;
 
   return (
     <div className="auth-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
-        <button className="auth-modal__close" type="button" aria-label="关闭登录窗口" onClick={onClose}>
+        <button className="auth-modal__close" type="button" aria-label={text.close} onClick={onClose}>
           <X size={19} strokeWidth={1.8} aria-hidden="true" />
         </button>
+
+        <div className="auth-modal__tabs" role="tablist" aria-label={text.tabs}>
+          <button
+            className={provider === 'community' ? 'auth-modal__tab auth-modal__tab--active' : 'auth-modal__tab'}
+            type="button"
+            role="tab"
+            aria-selected={provider === 'community'}
+            onClick={() => onProviderChange('community')}
+          >
+            {text.communityTab}
+          </button>
+          <button
+            className={provider === 'official' ? 'auth-modal__tab auth-modal__tab--active' : 'auth-modal__tab'}
+            type="button"
+            role="tab"
+            aria-selected={provider === 'official'}
+            onClick={() => onProviderChange('official')}
+          >
+            {text.officialTab}
+          </button>
+        </div>
 
         <div className="auth-modal__heading">
           <span className="auth-modal__eyebrow">MOD DB ACCOUNT</span>
           <h2 id="auth-modal-title">{title}</h2>
-          <p>Mod 站账号与社区账号、游戏账号分开管理。</p>
+          <p>{text.description}</p>
         </div>
 
         {isSuccess ? (
           <div className="auth-modal__success">
             <ShieldCheck size={30} strokeWidth={1.7} aria-hidden="true" />
-            <strong>绑定完成</strong>
-            <span>以后可使用已绑定的 {providerLabel} 进入 Mod 站。</span>
+            <strong>{text.completeTitle}</strong>
+            <span>{text.completePrefix} {providerLabel} {text.completeSuffix}</span>
             <button className="auth-modal__primary" type="button" onClick={onClose}>
-              完成
+              {text.complete}
             </button>
           </div>
         ) : isBinding ? (
           <form className="auth-form" onSubmit={bindAccount}>
             <div className="auth-provider-chip">
               <ShieldCheck size={17} strokeWidth={1.8} aria-hidden="true" />
-              <span>已认证：{provider === 'official' ? identity?.displayName : '社区账号'}</span>
+              <span>{text.verifiedPrefix}{provider === 'official' ? identity?.displayName : text.communityAccount}</span>
             </div>
             <div className="auth-field">
-              <span>绑定邮箱</span>
+              <span>{text.bindEmail}</span>
               <div className="auth-field__row">
                 <label className="auth-input-wrap auth-input-wrap--grow">
                   <Mail size={17} strokeWidth={1.8} aria-hidden="true" />
@@ -186,9 +322,9 @@ export function AuthModal({ provider, communityReady = false, initialError = '',
                     type="email"
                     value={bindEmail}
                     onChange={(event) => setBindEmail(event.target.value)}
-                    placeholder="用于接收验证码"
+                    placeholder={text.bindEmailPlaceholder}
                     autoComplete="email"
-                    aria-label="绑定邮箱"
+                    aria-label={text.bindEmail}
                     required
                   />
                 </label>
@@ -198,19 +334,19 @@ export function AuthModal({ provider, communityReady = false, initialError = '',
                   onClick={requestActivationCode}
                   disabled={sendBusy || busy || cooldownSeconds > 0}
                 >
-                  {sendBusy ? '发送中…' : cooldownSeconds > 0 ? `${cooldownSeconds}s` : sentEmail ? '重新发送' : '发送验证码'}
+                  {sendBusy ? text.sending : cooldownSeconds > 0 ? `${cooldownSeconds}s` : sentEmail ? text.resend : text.sendCode}
                 </button>
               </div>
             </div>
             <label className="auth-field">
-              <span>邮箱验证码</span>
+              <span>{text.emailCode}</span>
               <span className="auth-input-wrap">
                 <KeyRound size={17} strokeWidth={1.8} aria-hidden="true" />
                 <input
                   type="text"
                   value={activationCode}
                   onChange={(event) => setActivationCode(event.target.value)}
-                  placeholder="输入邮箱中的 6 位验证码"
+                  placeholder={text.emailCodePlaceholder}
                   autoComplete="one-time-code"
                   inputMode="numeric"
                   maxLength={6}
@@ -219,51 +355,54 @@ export function AuthModal({ provider, communityReady = false, initialError = '',
                 />
               </span>
             </label>
-            <p className="auth-form__hint">验证码有效期 10 分钟。邮箱只用于绑定 Mod 站账号，不能直接用邮箱注册或登录。</p>
+            <p className="auth-form__hint">{text.bindingHint}</p>
             {error ? <p className="auth-form__error" role="alert">{error}</p> : null}
             <button className="auth-modal__primary" type="submit" disabled={busy}>
               {busy ? <LoaderCircle className="auth-spinner" size={17} aria-hidden="true" /> : null}
-              {busy ? '绑定中…' : '注册并绑定'}
+              {busy ? text.binding : text.registerAndBind}
             </button>
           </form>
         ) : provider === 'community' ? (
           <div className="auth-modal__intro">
             <div className="auth-modal__provider-icon auth-modal__provider-icon--community">
-              <ShieldCheck size={26} strokeWidth={1.7} aria-hidden="true" />
+              <svg viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <rect x="100" y="233" width="200" height="200" rx="12" fill="#6b8e23" />
+                <rect x="500" y="233" width="200" height="200" rx="12" fill="#8b5a2b" />
+                <rect x="300" y="433" width="200" height="200" rx="12" fill="#555" />
+              </svg>
             </div>
-            <strong>使用社区账号认证</strong>
-            <span>通过 VintageStory Connect 授权后，再填写绑定邮箱并验证邮箱验证码。</span>
+            <strong>{text.communityAuthTitle}</strong>
+            <span>{text.communityAuthDescription}</span>
             {error ? <p className="auth-form__error" role="alert">{error}</p> : null}
             <button className="auth-modal__primary" type="button" onClick={startCommunityAuth}>
-              前往社区授权
+              {text.authorizeCommunity}
             </button>
           </div>
         ) : (
           <form className="auth-form" onSubmit={verifyOfficial}>
-            <div className="auth-modal__provider-note">先验证 VintageStory 官方账号，再绑定 Mod 站账号。</div>
             <label className="auth-field">
-              <span>游戏账号</span>
+              <span>{text.gameAccount}</span>
               <span className="auth-input-wrap">
                 <Mail size={17} strokeWidth={1.8} aria-hidden="true" />
                 <input
                   type="email"
                   value={account}
                   onChange={(event) => setAccount(event.target.value)}
-                  placeholder="VintageStory 账号邮箱"
+                  placeholder={text.gameAccountPlaceholder}
                   autoComplete="username"
                   required
                 />
               </span>
             </label>
             <label className="auth-field">
-              <span>游戏密码</span>
+              <span>{text.gamePassword}</span>
               <span className="auth-input-wrap">
                 <KeyRound size={17} strokeWidth={1.8} aria-hidden="true" />
                 <input
                   type="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  placeholder="VintageStory 账号密码"
+                  placeholder={text.gamePasswordPlaceholder}
                   autoComplete="current-password"
                   required
                 />
@@ -271,14 +410,14 @@ export function AuthModal({ provider, communityReady = false, initialError = '',
             </label>
             {preLoginToken ? (
               <label className="auth-field">
-                <span>二步验证码</span>
+                <span>{text.totp}</span>
                 <span className="auth-input-wrap">
                   <KeyRound size={17} strokeWidth={1.8} aria-hidden="true" />
                   <input
                     type="text"
                     value={totpCode}
                     onChange={(event) => setTotpCode(event.target.value)}
-                    placeholder="输入 6 位验证码"
+                    placeholder={text.totpPlaceholder}
                     autoComplete="one-time-code"
                     required
                   />
@@ -288,7 +427,7 @@ export function AuthModal({ provider, communityReady = false, initialError = '',
             {error ? <p className="auth-form__error" role="alert">{error}</p> : null}
             <button className="auth-modal__primary" type="submit" disabled={busy}>
               {busy ? <LoaderCircle className="auth-spinner" size={17} aria-hidden="true" /> : null}
-              {busy ? '验证中…' : '验证官方账号'}
+              {busy ? text.verifying : text.verifyOfficial}
             </button>
           </form>
         )}

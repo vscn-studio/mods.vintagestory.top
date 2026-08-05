@@ -1,5 +1,13 @@
 import { HomeShell } from '@/components/HomeShell';
+import { getSitePreferences } from '@/lib/site-preferences';
 
-export default function HomePage() {
-  return <HomeShell />;
+export default async function HomePage() {
+  const preferences = await getSitePreferences();
+
+  return (
+    <HomeShell
+      initialLanguage={preferences.language}
+      initialNightMode={preferences.nightMode}
+    />
+  );
 }

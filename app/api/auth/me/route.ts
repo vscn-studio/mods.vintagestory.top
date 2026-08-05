@@ -14,7 +14,8 @@ export async function GET(request: NextRequest) {
       displayName: account.displayName,
       bindEmail: account.bindEmail,
       playerName: account.playerName,
-      username: account.username
+      username: account.username,
+      avatarUrl: account.avatarUrl
     }
   });
 }
