@@ -1,0 +1,8 @@
+<svg viewBox="0 0 700 120" xmlns="http://www.w3.org/2000/svg">
+  <rect x="40" y="24" width="36" height="36" rx="4" fill="#6b8e23"/>
+  <rect x="112" y="24" width="36" height="36" rx="4" fill="#8b5a2b"/>
+  <rect x="76" y="60" width="36" height="36" rx="4" fill="#555"/>
+  <text x="170" y="78" font-size="50" font-family="Inter, Arial, Helvetica, sans-serif" font-weight="600" letter-spacing="0.5" fill="#ffffff">
+    VSCN Mod DB
+  </text>
+</svg>

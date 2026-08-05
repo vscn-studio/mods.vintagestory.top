@@ -1,0 +1,42 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vscn_mod_db_web
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      OIDC_ISSUER: ${OIDC_ISSUER:-https://connect.vintagestory.top}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-}
+      WEB_URL: ${WEB_URL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      MOD_AUTH_SESSION_SECRET: ${MOD_AUTH_SESSION_SECRET:-}
+      MOD_AUTH_DATA_DIR: ${MOD_AUTH_DATA_DIR:-/app/data}
+      VS_AUTH3_LOGIN_URL: ${VS_AUTH3_LOGIN_URL:-https://auth3.vintagestory.at/v2/gamelogin}
+      VS_API_LATEST_UNSTABLE_URL: ${VS_API_LATEST_UNSTABLE_URL:-https://api.vintagestory.at/latestunstable.txt}
+    ports:
+      # 只允许本机反向代理访问，避免 Docker 端口直接暴露到公网。
+      - "${WEB_BIND_HOST:-127.0.0.1}:${WEB_PORT:-3100}:3100"
+    volumes:
+      - mod_auth_data:${MOD_AUTH_DATA_DIR:-/app/data}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3100/').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  mod_auth_data:
