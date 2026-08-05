@@ -1,7 +1,8 @@
 'use client';
 
-import { ArrowLeft, FolderKanban, Package, Settings, UsersRound } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Grid2X2, List } from 'lucide-react';
 import Link from 'next/link';
+import { useState } from 'react';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
 
 type AccountPreviewPageProps = {
@@ -9,36 +10,78 @@ type AccountPreviewPageProps = {
   id: string;
 };
 
+type ProjectType = 'mods' | 'theme-pack' | 'modpacks' | 'server';
+
+type ProfileProject = {
+  id: string;
+  type: ProjectType;
+  name: { zh: string; en: string };
+  description: { zh: string; en: string };
+  tags: Array<{ zh: string; en: string }>;
+};
+
+const profileProjects: Record<string, ProfileProject[]> = {
+  mira: [
+    {
+      id: 'wildcraft',
+      type: 'mods',
+      name: { zh: '荒野工艺', en: 'Wildcraft' },
+      description: { zh: '扩展野外采集、制作与生存路线。', en: 'Expands gathering, crafting, and survival paths.' },
+      tags: [{ zh: '生存', en: 'Survival' }, { zh: '社区创作', en: 'Community' }]
+    }
+  ],
+  stoneworks: [
+    {
+      id: 'mechanical-expansion',
+      type: 'mods',
+      name: { zh: '机械扩展', en: 'Mechanical Expansion' },
+      description: { zh: '为风车、齿轮和自动化设备加入新的组合与升级选项。', en: 'Adds new combinations and upgrades for windmills, gears, and automation.' },
+      tags: [{ zh: '自动化', en: 'Automation' }, { zh: '双端', en: 'Client + server' }]
+    }
+  ],
+  'lumen-team': [
+    {
+      id: 'ancient-ruins',
+      type: 'mods',
+      name: { zh: '远古遗迹', en: 'Ancient Ruins' },
+      description: { zh: '在世界各处加入可探索的遗迹、谜题和奖励。', en: 'Introduces explorable ruins, puzzles, and rewards.' },
+      tags: [{ zh: '探索', en: 'Exploration' }, { zh: '多人', en: 'Multiplayer' }]
+    }
+  ]
+};
+
 const copy = {
   'zh-CN': {
-    back: '返回内容',
-    userEyebrow: '用户首页',
-    organizationEyebrow: '组织首页',
-    projects: '项目',
-    followers: '关注者',
-    joined: '加入时间',
     projectsTitle: '公开项目',
-    activityTitle: '最近动态',
-    settings: '页面设置',
-    placeholder: '相关内容接入后将在这里显示。',
-    joinedValue: '2026 年',
-    projectCount: '0',
-    followerCount: '0'
+    contentNavigation: '探索内容',
+    mods: '模组',
+    themePacks: '主题包',
+    modpacks: '整合包',
+    serverTweaks: '服务器调整',
+    viewMode: '显示方式',
+    listView: '列表布局',
+    gridView: '网格布局',
+    previousPage: '上一页',
+    nextPage: '下一页',
+    pagination: '分页',
+    noProjects: '该分类暂无公开项目。',
+    placeholder: '相关内容接入后将在这里显示。'
   },
   en: {
-    back: 'Back to content',
-    userEyebrow: 'User profile',
-    organizationEyebrow: 'Organization profile',
-    projects: 'Projects',
-    followers: 'Followers',
-    joined: 'Joined',
     projectsTitle: 'Public projects',
-    activityTitle: 'Recent activity',
-    settings: 'Page settings',
-    placeholder: 'Related content will appear here when connected.',
-    joinedValue: '2026',
-    projectCount: '0',
-    followerCount: '0'
+    contentNavigation: 'Explore content',
+    mods: 'Mods',
+    themePacks: 'Theme packs',
+    modpacks: 'Modpacks',
+    serverTweaks: 'Server tweaks',
+    viewMode: 'View mode',
+    listView: 'List view',
+    gridView: 'Grid view',
+    previousPage: 'Previous page',
+    nextPage: 'Next page',
+    pagination: 'Pagination',
+    noProjects: 'No public projects in this category yet.',
+    placeholder: 'Related content will appear here when connected.'
   }
 } as const;
 
@@ -54,51 +97,109 @@ export function AccountPreviewPage({ kind, id }: AccountPreviewPageProps) {
   const language = useSiteLanguage();
   const text = copy[language];
   const name = displayName(id);
+  const [projectType, setProjectType] = useState<ProjectType>('mods');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const projectTabs: Array<{ id: ProjectType; label: string }> = [
+    { id: 'mods', label: text.mods },
+    { id: 'theme-pack', label: text.themePacks },
+    { id: 'modpacks', label: text.modpacks },
+    { id: 'server', label: text.serverTweaks }
+  ];
+  const visibleProjects = (profileProjects[id] ?? []).filter((project) => project.type === projectType);
 
   return (
     <section className="profile-page" aria-labelledby="profile-title">
       <div className="profile-page__inner">
-        <Link className="preview-page__back" href="/mods">
-          <ArrowLeft size={17} strokeWidth={1.9} aria-hidden="true" />
-          <span>{text.back}</span>
-        </Link>
-
         <header className="profile-hero">
           <div className="profile-avatar">
             <img src="/brand/logo-icon-rounded.svg" alt="" />
           </div>
           <div className="profile-hero__copy">
-            <span className="preview-eyebrow">{kind === 'organization' ? text.organizationEyebrow : text.userEyebrow}</span>
             <h1 id="profile-title">{name}</h1>
             <p>{text.placeholder}</p>
           </div>
-          <button className="preview-action" type="button">
-            <Settings size={17} strokeWidth={1.9} aria-hidden="true" />
-            <span>{text.settings}</span>
-          </button>
         </header>
 
-        <dl className="profile-stats">
-          <div><dt>{text.projects}</dt><dd>{text.projectCount}</dd></div>
-          <div><dt>{text.followers}</dt><dd>{text.followerCount}</dd></div>
-          <div><dt>{text.joined}</dt><dd>{text.joinedValue}</dd></div>
-        </dl>
+        <div className="profile-projects">
+          <div className="content-toolbar profile-project-toolbar">
+            <nav className="content-switcher" aria-label={text.contentNavigation}>
+              {projectTabs.map((tab) => (
+                <button
+                  className={projectType === tab.id ? 'content-switcher__item content-switcher__item--active' : 'content-switcher__item'}
+                  key={tab.id}
+                  type="button"
+                  aria-pressed={projectType === tab.id}
+                  onClick={() => setProjectType(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
 
-        <div className="profile-layout">
-          <section className="profile-section">
-            <div className="preview-section__heading">
-              <h2>{text.projectsTitle}</h2>
-              {kind === 'organization' ? <UsersRound size={18} strokeWidth={1.8} aria-hidden="true" /> : <FolderKanban size={18} strokeWidth={1.8} aria-hidden="true" />}
+            <div className="content-view-toggle" role="group" aria-label={text.viewMode}>
+              <button
+                className={viewMode === 'list' ? 'content-view-toggle__item content-view-toggle__item--active' : 'content-view-toggle__item'}
+                type="button"
+                title={text.listView}
+                aria-label={text.listView}
+                aria-pressed={viewMode === 'list'}
+                onClick={() => setViewMode('list')}
+              >
+                <List size={17} strokeWidth={1.8} aria-hidden="true" />
+              </button>
+              <button
+                className={viewMode === 'grid' ? 'content-view-toggle__item content-view-toggle__item--active' : 'content-view-toggle__item'}
+                type="button"
+                title={text.gridView}
+                aria-label={text.gridView}
+                aria-pressed={viewMode === 'grid'}
+                onClick={() => setViewMode('grid')}
+              >
+                <Grid2X2 size={17} strokeWidth={1.8} aria-hidden="true" />
+              </button>
             </div>
-            <div className="preview-placeholder">{text.placeholder}</div>
-          </section>
-          <section className="profile-section">
-            <div className="preview-section__heading">
-              <h2>{text.activityTitle}</h2>
-              <Package size={18} strokeWidth={1.8} aria-hidden="true" />
+
+            <div className="content-pagination" aria-label={text.pagination}>
+              <button className="content-pagination__button" type="button" title={text.previousPage} aria-label={text.previousPage} disabled>
+                <ChevronLeft size={17} strokeWidth={1.8} aria-hidden="true" />
+              </button>
+              <span className="content-pagination__current" aria-current="page">1</span>
+              <button className="content-pagination__button" type="button" title={text.nextPage} aria-label={text.nextPage} disabled>
+                <ChevronRight size={17} strokeWidth={1.8} aria-hidden="true" />
+              </button>
             </div>
-            <div className="preview-placeholder">{text.placeholder}</div>
-          </section>
+          </div>
+
+          <div className={`content-cards content-cards--${viewMode} profile-projects__content`} data-project-type={projectType} aria-label={text.projectsTitle}>
+            {visibleProjects.length > 0 ? visibleProjects.map((project) => {
+              const projectName = language === 'en' ? project.name.en : project.name.zh;
+              const projectDescription = language === 'en' ? project.description.en : project.description.zh;
+              return (
+                <Link className={`content-card content-card--${viewMode} content-card--interactive`} href={`/${project.type === 'modpacks' ? 'modpack' : 'mod'}/${project.id}`} key={project.id}>
+                  <div className="content-card__media">
+                    <img src="/brand/vintage-story-game-logo.png" alt={projectName} loading="lazy" />
+                  </div>
+                  <div className="content-card__body">
+                    <div className="content-card__summary">
+                      <div className="content-card__icon" aria-hidden="true">
+                        <img src="/brand/vintage-story-game-logo.png" alt="" loading="lazy" />
+                      </div>
+                      <div className="content-card__copy">
+                        <h2 className="content-card__title">
+                          <span>{projectName}</span>{' '}
+                          <span className="content-card__author">by {name}</span>
+                        </h2>
+                        <p className="content-card__description">{projectDescription}</p>
+                      </div>
+                    </div>
+                    <ul className="content-card__tags" aria-label={language === 'en' ? 'Tags' : '标签'}>
+                      {project.tags.map((tag) => <li key={tag.en}>{language === 'en' ? tag.en : tag.zh}</li>)}
+                    </ul>
+                  </div>
+                </Link>
+              );
+            }) : <p className="profile-projects__empty">{text.noProjects}</p>}
+          </div>
         </div>
       </div>
     </section>
