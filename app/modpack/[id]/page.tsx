@@ -1,9 +1,9 @@
-import { ContentBrowser } from '@/components/ContentBrowser';
+import { ContentPreviewPage } from '@/components/ContentPreviewPage';
 import { HomeShell } from '@/components/HomeShell';
 import { getSitePreferences } from '@/lib/site-preferences';
 
-export default async function ModsPage() {
-  const preferences = await getSitePreferences();
+export default async function ModpackPreviewRoute({ params }: { params: Promise<{ id: string }> }) {
+  const [{ id }, preferences] = await Promise.all([params, getSitePreferences()]);
 
   return (
     <HomeShell
@@ -11,7 +11,7 @@ export default async function ModsPage() {
       initialNightMode={preferences.nightMode}
       initialSessionAccount={preferences.sessionAccount}
     >
-      <ContentBrowser />
+      <ContentPreviewPage kind="modpack" id={id} />
     </HomeShell>
   );
 }

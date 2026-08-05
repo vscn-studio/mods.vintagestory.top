@@ -6,7 +6,11 @@ export default async function ModpacksPage() {
   const preferences = await getSitePreferences();
 
   return (
-    <HomeShell initialLanguage={preferences.language} initialNightMode={preferences.nightMode}>
+    <HomeShell
+      initialLanguage={preferences.language}
+      initialNightMode={preferences.nightMode}
+      initialSessionAccount={preferences.sessionAccount}
+    >
       <ContentBrowser />
     </HomeShell>
   );

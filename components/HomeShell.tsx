@@ -5,6 +5,7 @@ import {
   Boxes,
   ChevronDown,
   Compass,
+  Download,
   FolderKanban,
   Heart,
   House,
@@ -17,9 +18,9 @@ import {
   Palette,
   Settings,
   ServerCog,
+  ShieldCheck,
   Sun,
   Upload,
-  UserRound,
   UsersRound,
   X,
   type LucideIcon
@@ -27,6 +28,7 @@ import {
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AuthModal, type AuthProvider, type SiteLanguage } from '@/components/AuthModal';
 import { SiteLanguageContext } from '@/components/SiteLanguageContext';
+import type { SessionAccountSummary } from '@/lib/auth-server';
 
 const usePreferenceLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
@@ -82,6 +84,7 @@ const siteCopy = {
     mainNavigation: '主导航',
     explore: '探索内容',
     exploreCategories: '探索内容分类',
+    mvl: '获取 MVL',
     submit: '提交模组',
     translations: '汉化计划',
     heroIconAlt: '复古物语中文社区图标',
@@ -98,6 +101,7 @@ const siteCopy = {
     favorites: '模组收藏',
     projects: '个人项目',
     organizations: '组织管理',
+    admin: '后台管理',
     logout: '退出登录'
   },
   en: {
@@ -117,6 +121,7 @@ const siteCopy = {
     mainNavigation: 'Main navigation',
     explore: 'Explore content',
     exploreCategories: 'Explore content categories',
+    mvl: 'Get MVL',
     submit: 'Submit a mod',
     translations: 'Translation project',
     heroIconAlt: 'Vintage Story Chinese community icon',
@@ -133,6 +138,7 @@ const siteCopy = {
     favorites: 'Favorite mods',
     projects: 'Personal projects',
     organizations: 'Organization management',
+    admin: 'Admin panel',
     logout: 'Sign out'
   }
 } as const;
@@ -141,21 +147,23 @@ type HomeShellProps = {
   children?: ReactNode;
   initialLanguage?: SiteLanguage;
   initialNightMode?: boolean;
+  initialSessionAccount?: SessionAccountSummary | null;
 };
 
-type SessionAccount = {
-  displayName: string;
-  provider: 'official' | 'community';
-  avatarUrl?: string;
-};
+type SessionAccount = SessionAccountSummary;
 
-export function HomeShell({ children, initialLanguage = 'zh-CN', initialNightMode = false }: HomeShellProps) {
+export function HomeShell({
+  children,
+  initialLanguage = 'zh-CN',
+  initialNightMode = false,
+  initialSessionAccount = null
+}: HomeShellProps) {
   const [isExploreOpen, setIsExploreOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNightMode, setIsNightMode] = useState(initialNightMode);
   const [language, setLanguage] = useState<SiteLanguage>(initialLanguage);
   const [isLanguageOpen, setIsLanguageOpen] = useState(false);
-  const [sessionAccount, setSessionAccount] = useState<SessionAccount | null>(null);
+  const [sessionAccount, setSessionAccount] = useState<SessionAccount | null>(initialSessionAccount);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [authProvider, setAuthProvider] = useState<AuthProvider | null>(null);
   const [communityReady, setCommunityReady] = useState(false);
@@ -347,28 +355,31 @@ export function HomeShell({ children, initialLanguage = 'zh-CN', initialNightMod
                 <Languages size={18} strokeWidth={1.8} aria-hidden="true" />
               </button>
 
-              {isLanguageOpen ? (
-                <div className="language-popover" role="menu" aria-label={text.chooseLanguage}>
-                  <button
-                    className={`language-item${language === 'zh-CN' ? ' language-item--active' : ''}`}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={language === 'zh-CN'}
-                    onClick={() => changeLanguage('zh-CN')}
-                  >
-                    {text.simplifiedChinese}
-                  </button>
-                  <button
-                    className={`language-item${language === 'en' ? ' language-item--active' : ''}`}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={language === 'en'}
-                    onClick={() => changeLanguage('en')}
-                  >
-                    {text.english}
-                  </button>
-                </div>
-              ) : null}
+              <div
+                className={isLanguageOpen ? 'language-popover language-popover--open' : 'language-popover'}
+                role="menu"
+                aria-hidden={!isLanguageOpen}
+                aria-label={text.chooseLanguage}
+              >
+                <button
+                  className={`language-item${language === 'zh-CN' ? ' language-item--active' : ''}`}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={language === 'zh-CN'}
+                  onClick={() => changeLanguage('zh-CN')}
+                >
+                  {text.simplifiedChinese}
+                </button>
+                <button
+                  className={`language-item${language === 'en' ? ' language-item--active' : ''}`}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={language === 'en'}
+                  onClick={() => changeLanguage('en')}
+                >
+                  {text.english}
+                </button>
+              </div>
             </div>
 
             {sessionAccount ? (
@@ -392,45 +403,61 @@ export function HomeShell({ children, initialLanguage = 'zh-CN', initialNightMod
                     {sessionAccount.avatarUrl ? (
                       <img src={sessionAccount.avatarUrl} alt="" />
                     ) : (
-                      <UserRound size={18} strokeWidth={1.8} />
+                      <span className="account-avatar__initial">
+                        {sessionAccount.displayName.trim().slice(0, 1).toUpperCase() || '?'}
+                      </span>
                     )}
                   </span>
                   <span className="account-toggle__name">{sessionAccount.displayName}</span>
                   <ChevronDown className={isAccountOpen ? 'account-toggle__chevron account-toggle__chevron--up' : 'account-toggle__chevron'} size={15} strokeWidth={1.8} aria-hidden="true" />
                 </button>
 
-                {isAccountOpen ? (
-                  <div className="account-popover" role="menu" aria-label={text.accountMenu}>
-                    <button className="account-menu__item" type="button" role="menuitem">
-                      <House size={16} strokeWidth={1.8} aria-hidden="true" />
-                      <span>{text.personalHome}</span>
-                    </button>
-                    <button className="account-menu__item" type="button" role="menuitem">
-                      <Settings size={16} strokeWidth={1.8} aria-hidden="true" />
-                      <span>{text.settings}</span>
-                    </button>
-                    <button className="account-menu__item" type="button" role="menuitem">
-                      <Bell size={16} strokeWidth={1.8} aria-hidden="true" />
-                      <span>{text.notifications}</span>
-                    </button>
-                    <button className="account-menu__item" type="button" role="menuitem">
-                      <Heart size={16} strokeWidth={1.8} aria-hidden="true" />
-                      <span>{text.favorites}</span>
-                    </button>
-                    <button className="account-menu__item" type="button" role="menuitem">
-                      <FolderKanban size={16} strokeWidth={1.8} aria-hidden="true" />
-                      <span>{text.projects}</span>
-                    </button>
-                    <button className="account-menu__item" type="button" role="menuitem">
-                      <UsersRound size={16} strokeWidth={1.8} aria-hidden="true" />
-                      <span>{text.organizations}</span>
-                    </button>
-                    <button className="account-menu__item account-menu__item--danger" type="button" role="menuitem" onClick={signOut}>
-                      <LogOut size={16} strokeWidth={1.8} aria-hidden="true" />
-                      <span>{text.logout}</span>
-                    </button>
-                  </div>
-                ) : null}
+                <div
+                  className={isAccountOpen ? 'account-popover account-popover--open' : 'account-popover'}
+                  role="menu"
+                  aria-hidden={!isAccountOpen}
+                  aria-label={text.accountMenu}
+                >
+                  <button className="account-menu__item" type="button" role="menuitem">
+                    <House size={16} strokeWidth={1.8} aria-hidden="true" />
+                    <span>{text.personalHome}</span>
+                  </button>
+                  <button className="account-menu__item" type="button" role="menuitem">
+                    <Settings size={16} strokeWidth={1.8} aria-hidden="true" />
+                    <span>{text.settings}</span>
+                  </button>
+                  <button className="account-menu__item" type="button" role="menuitem">
+                    <Bell size={16} strokeWidth={1.8} aria-hidden="true" />
+                    <span>{text.notifications}</span>
+                  </button>
+                  <button className="account-menu__item" type="button" role="menuitem">
+                    <Heart size={16} strokeWidth={1.8} aria-hidden="true" />
+                    <span>{text.favorites}</span>
+                  </button>
+                  <button className="account-menu__item" type="button" role="menuitem">
+                    <FolderKanban size={16} strokeWidth={1.8} aria-hidden="true" />
+                    <span>{text.projects}</span>
+                  </button>
+                  <button className="account-menu__item" type="button" role="menuitem">
+                    <UsersRound size={16} strokeWidth={1.8} aria-hidden="true" />
+                    <span>{text.organizations}</span>
+                  </button>
+                  {sessionAccount.provider === 'community' && sessionAccount.isAdmin ? (
+                    <a
+                      className="account-menu__item"
+                      href="/admin"
+                      role="menuitem"
+                      onClick={() => setIsAccountOpen(false)}
+                    >
+                      <ShieldCheck size={16} strokeWidth={1.8} aria-hidden="true" />
+                      <span>{text.admin}</span>
+                    </a>
+                  ) : null}
+                  <button className="account-menu__item account-menu__item--danger" type="button" role="menuitem" onClick={signOut}>
+                    <LogOut size={16} strokeWidth={1.8} aria-hidden="true" />
+                    <span>{text.logout}</span>
+                  </button>
+                </div>
               </div>
             ) : (
               <button
@@ -488,30 +515,33 @@ export function HomeShell({ children, initialLanguage = 'zh-CN', initialNightMod
                 />
               </button>
 
-              {isExploreOpen ? (
-                <div className="explore-popover" role="menu" aria-label={text.exploreCategories}>
-                  <div className="explore-list">
-                    {exploreItems.map((item) => {
-                      const ItemIcon = item.icon;
-                      return (
-                        <a
-                          className="explore-item"
-                          href={item.href}
-                          key={item.href}
-                          role="menuitem"
-                          onClick={() => {
-                            setIsExploreOpen(false);
-                            setIsMenuOpen(false);
-                          }}
-                        >
-                          <ItemIcon size={18} strokeWidth={2} aria-hidden="true" />
-                          <span>{language === 'en' ? item.en : item.zh}</span>
-                        </a>
-                      );
-                    })}
-                  </div>
+              <div
+                className={isExploreOpen ? 'explore-popover explore-popover--open' : 'explore-popover'}
+                role="menu"
+                aria-hidden={!isExploreOpen}
+                aria-label={text.exploreCategories}
+              >
+                <div className="explore-list">
+                  {exploreItems.map((item) => {
+                    const ItemIcon = item.icon;
+                    return (
+                      <a
+                        className="explore-item"
+                        href={item.href}
+                        key={item.href}
+                        role="menuitem"
+                        onClick={() => {
+                          setIsExploreOpen(false);
+                          setIsMenuOpen(false);
+                        }}
+                      >
+                        <ItemIcon size={18} strokeWidth={2} aria-hidden="true" />
+                        <span>{language === 'en' ? item.en : item.zh}</span>
+                      </a>
+                    );
+                  })}
                 </div>
-              ) : null}
+              </div>
             </div>
 
             <a
@@ -523,6 +553,15 @@ export function HomeShell({ children, initialLanguage = 'zh-CN', initialNightMod
             >
               <Languages size={19} strokeWidth={2} aria-hidden="true" />
               {text.translations}
+            </a>
+
+            <a
+              className="nav-button nav-button--accent"
+              href="/mvl"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              <Download size={19} strokeWidth={2} aria-hidden="true" />
+              {text.mvl}
             </a>
           </nav>
 

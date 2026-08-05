@@ -48,7 +48,7 @@ const modalCopy = {
     binding: '绑定中…',
     registerAndBind: '注册并绑定',
     communityAuthTitle: '使用社区账号认证',
-    communityAuthDescription: '通过 VintageStory Connect 授权后，再填写绑定邮箱并验证邮箱验证码。',
+    communityAuthDescription: '首次使用需要绑定邮箱并验证验证码，之后可直接使用社区账号登录。',
     authorizeCommunity: '前往社区授权',
     gameAccount: '游戏账号',
     gameAccountPlaceholder: 'VintageStory 账号邮箱',
@@ -91,7 +91,7 @@ const modalCopy = {
     binding: 'Binding…',
     registerAndBind: 'Register and bind',
     communityAuthTitle: 'Authenticate with your community account',
-    communityAuthDescription: 'Authorize through VintageStory Connect, then enter a binding email and verify its code.',
+    communityAuthDescription: 'The first use binds an email with a verification code. Later sign-ins use the community account directly.',
     authorizeCommunity: 'Authorize with community',
     gameAccount: 'Game account',
     gameAccountPlaceholder: 'VintageStory account email',
@@ -186,7 +186,12 @@ export function AuthModal({
         }
         throw new Error(payload.message ?? text.officialAuthFailed);
       }
-      const payload = (await response.json()) as { identity: OfficialIdentity };
+      const payload = (await response.json()) as { identity: OfficialIdentity; authenticated?: boolean };
+      if (payload.authenticated) {
+        onAuthenticated();
+        onClose();
+        return;
+      }
       setIdentity(payload.identity);
       setOfficialStage('bind');
       setPassword('');

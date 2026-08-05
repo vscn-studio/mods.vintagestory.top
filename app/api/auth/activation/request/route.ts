@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { sendActivationEmail } from '@/lib/email-server';
 import {
   discardActivationChallenge,
+  findBindingConflict,
   getPendingIdentity,
   issueActivationChallenge,
   normalizeEmail
@@ -27,6 +28,18 @@ export async function POST(request: NextRequest) {
 
   const bindEmail = normalizeEmail(body.bindEmail);
   if (!bindEmail) return errorResponse('请输入有效的绑定邮箱。');
+
+  try {
+    if (await findBindingConflict(identity, bindEmail)) {
+      return errorResponse(
+        identity.provider === 'community' ? '该邮箱已绑定另外一个社区账号。' : '该邮箱已绑定另外一个游戏账号。',
+        409,
+        { code: 'EMAIL_PROVIDER_CONFLICT' }
+      );
+    }
+  } catch {
+    return errorResponse('账号绑定服务暂时不可用，请稍后重试。', 503);
+  }
 
   let challenge: Awaited<ReturnType<typeof issueActivationChallenge>>;
   try {

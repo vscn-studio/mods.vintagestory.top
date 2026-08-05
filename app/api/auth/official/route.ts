@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { setPendingIdentity } from '@/lib/auth-server';
+import { authenticateIdentity, clearPendingIdentity, setAccountSession, setPendingIdentity } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
 
@@ -90,10 +90,27 @@ export async function POST(request: NextRequest) {
     subject: `vs:${playerUid}`,
     displayName: playerName,
     providerEmail: account,
+    providerEmailVerified: true,
     playerName,
     playerUid
   };
-  const response = NextResponse.json({ ok: true, identity });
+  let authentication: Awaited<ReturnType<typeof authenticateIdentity>>;
+  try {
+    authentication = await authenticateIdentity(identity);
+  } catch {
+    return errorResponse('账号绑定服务暂时不可用，请稍后重试。', 503);
+  }
+  if (authentication.status === 'provider-conflict') {
+    return errorResponse('该邮箱已绑定另外一个游戏账号。', 409, { code: 'EMAIL_PROVIDER_CONFLICT' });
+  }
+  if (authentication.status === 'authenticated') {
+    const response = NextResponse.json({ ok: true, authenticated: true, identity });
+    setAccountSession(response, authentication.account.id);
+    clearPendingIdentity(response);
+    return response;
+  }
+
+  const response = NextResponse.json({ ok: true, authenticated: false, identity });
   setPendingIdentity(response, identity);
   return response;
 }

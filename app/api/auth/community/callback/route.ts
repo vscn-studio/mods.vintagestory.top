@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { setPendingIdentity } from '@/lib/auth-server';
+import {
+  authenticateIdentity,
+  clearPendingIdentity,
+  normalizeGroups,
+  setAccountSession,
+  setPendingIdentity
+} from '@/lib/auth-server';
 import { publicOrigin, publicUrl } from '@/lib/web-url';
 
 export const runtime = 'nodejs';
@@ -93,7 +99,9 @@ export async function GET(request: NextRequest) {
     preferred_username?: string;
     name?: string;
     email?: string;
+    email_verified?: boolean;
     picture?: string;
+    groups?: unknown;
   };
   try {
     const response = await fetch(discovery.userinfo_endpoint, {
@@ -109,20 +117,38 @@ export async function GET(request: NextRequest) {
 
   const displayName = (profile.preferred_username ?? profile.name ?? '').trim();
   if (!displayName) return errorRedirect(request, '社区 OIDC 未返回用户名。');
+  const groups = normalizeGroups(profile.groups);
   const identity = {
     provider: 'community' as const,
     subject: `oidc:${profile.sub}`,
     displayName,
     providerEmail: profile.email?.trim() || undefined,
+    providerEmailVerified: profile.email_verified === true,
     username: profile.preferred_username?.trim() || displayName,
-    avatarUrl: profile.picture?.trim() || undefined
+    avatarUrl: profile.picture?.trim() || undefined,
+    groups: groups.length > 0 ? groups : undefined
   };
 
   const returnTo = safeReturnTo(request, request.cookies.get('mod_oidc_return_to')?.value);
   const redirect = new URL(returnTo, `${publicOrigin(request)}/`);
-  redirect.searchParams.set('auth', 'community');
+  let authentication: Awaited<ReturnType<typeof authenticateIdentity>>;
+  try {
+    authentication = await authenticateIdentity(identity);
+  } catch {
+    return errorRedirect(request, '账号绑定服务暂时不可用，请稍后重试。');
+  }
+  if (authentication.status === 'provider-conflict') {
+    return errorRedirect(request, '该邮箱已绑定另外一个社区账号。');
+  }
+
+  if (authentication.status !== 'authenticated') redirect.searchParams.set('auth', 'community');
   const response = NextResponse.redirect(redirect);
-  setPendingIdentity(response, identity);
+  if (authentication.status === 'authenticated') {
+    setAccountSession(response, authentication.account.id);
+  } else {
+    setPendingIdentity(response, identity);
+  }
   clearOidcCookies(response);
+  if (authentication.status === 'authenticated') clearPendingIdentity(response);
   return response;
 }

@@ -1,9 +1,9 @@
-import { ContentBrowser } from '@/components/ContentBrowser';
+import { AccountPreviewPage } from '@/components/AccountPreviewPage';
 import { HomeShell } from '@/components/HomeShell';
 import { getSitePreferences } from '@/lib/site-preferences';
 
-export default async function ModsPage() {
-  const preferences = await getSitePreferences();
+export default async function UserPreviewRoute({ params }: { params: Promise<{ username: string }> }) {
+  const [{ username }, preferences] = await Promise.all([params, getSitePreferences()]);
 
   return (
     <HomeShell
@@ -11,7 +11,7 @@ export default async function ModsPage() {
       initialNightMode={preferences.nightMode}
       initialSessionAccount={preferences.sessionAccount}
     >
-      <ContentBrowser />
+      <AccountPreviewPage kind="user" id={username} />
     </HomeShell>
   );
 }

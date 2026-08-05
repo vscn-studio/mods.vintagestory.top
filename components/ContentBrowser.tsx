@@ -1,46 +1,19 @@
 'use client';
 
-import { ChevronDown, ChevronLeft, ChevronRight, Grid2X2, List, PackageOpen, Search } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Clock3, Download, Grid2X2, Heart, List, Search } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
 
 type ContentType = 'mods' | 'theme-pack' | 'modpacks' | 'server';
 type ViewMode = 'list' | 'grid';
 
-type FilterOption = {
-  id: string;
-  zh: string;
-  en: string;
-};
-
 const typeTabs: Array<{ id: ContentType; href: string; zh: string; en: string }> = [
   { id: 'mods', href: '/mods', zh: '模组', en: 'Mods' },
   { id: 'theme-pack', href: '/mods?type=theme-pack', zh: '主题包', en: 'Theme Packs' },
   { id: 'modpacks', href: '/modpacks', zh: '整合包', en: 'Modpacks' },
   { id: 'server', href: '/mods?type=server', zh: '服务器调整', en: 'Server Tweaks' }
-];
-
-const gameVersions: FilterOption[] = [
-  { id: '1.22', zh: '1.22', en: '1.22' },
-  { id: '1.21', zh: '1.21', en: '1.21' },
-  { id: '1.20', zh: '1.20', en: '1.20' },
-  { id: '1.19', zh: '1.19', en: '1.19' }
-];
-
-const categories: FilterOption[] = [
-  { id: 'adventure', zh: '冒险', en: 'Adventure' },
-  { id: 'building', zh: '建筑', en: 'Building' },
-  { id: 'survival', zh: '生存', en: 'Survival' },
-  { id: 'technology', zh: '科技', en: 'Technology' },
-  { id: 'magic', zh: '魔法', en: 'Magic' }
-];
-
-const environments: FilterOption[] = [
-  { id: 'client', zh: '纯客户端', en: 'Client-only' },
-  { id: 'server', zh: '纯服务器', en: 'Server-only' },
-  { id: 'both', zh: '双端', en: 'Both sides' }
 ];
 
 const browserCopy = {
@@ -54,12 +27,18 @@ const browserCopy = {
     environment: '运行环境',
     searchPlaceholder: '搜索模组名称、作者或标签',
     sort: '排序方式',
-    sortUpdated: '最近更新',
-    sortCreated: '最近发布',
+    sortRelevance: '相关性',
     sortDownloads: '下载量',
+    sortFollowers: '关注量',
+    sortPublished: '发布时间',
+    sortUpdated: '更新时间',
     viewMode: '显示方式',
     listView: '列表布局',
     gridView: '网格布局',
+    cardDownloads: '下载量',
+    cardFollowers: '关注量',
+    cardUpdated: '最近更新',
+    cardBy: 'by',
     perPage: '每页显示',
     items: '项',
     previousPage: '上一页',
@@ -77,12 +56,18 @@ const browserCopy = {
     environment: 'Environment',
     searchPlaceholder: 'Search by name, author, or tag',
     sort: 'Sort by',
-    sortUpdated: 'Recently updated',
-    sortCreated: 'Recently published',
+    sortRelevance: 'Relevance',
     sortDownloads: 'Downloads',
+    sortFollowers: 'Followers',
+    sortPublished: 'Date published',
+    sortUpdated: 'Date updated',
     viewMode: 'View mode',
     listView: 'List view',
     gridView: 'Grid view',
+    cardDownloads: 'Downloads',
+    cardFollowers: 'Followers',
+    cardUpdated: 'Updated',
+    cardBy: 'by',
     perPage: 'Items per page',
     items: 'items',
     previousPage: 'Previous page',
@@ -91,6 +76,99 @@ const browserCopy = {
     emptyDescription: 'Filtering and sorting controls are ready. Content will appear here once connected.'
   }
 } as const;
+
+type SampleMod = {
+  id: string;
+  image: string;
+  name: { zh: string; en: string };
+  author: string;
+  authorType: 'user' | 'organization';
+  authorId: string;
+  description: { zh: string; en: string };
+  tags: { zh: string; en: string }[];
+  downloads: string;
+  followers: string;
+  updated: { zh: string; en: string };
+};
+
+const sampleMods: SampleMod[] = [
+  {
+    id: 'wildcraft',
+    image: '/brand/vintage-story-game-logo.png',
+    name: { zh: '荒野工艺', en: 'Wildcraft' },
+    author: 'Mira',
+    authorType: 'user',
+    authorId: 'mira',
+    description: {
+      zh: '扩展野外采集、制作与生存路线，让每次远行都有新的发现。',
+      en: 'Expands gathering, crafting, and survival paths for more rewarding expeditions.'
+    },
+    tags: [
+      { zh: '生存', en: 'Survival' },
+      { zh: '双端', en: 'Both sides' }
+    ],
+    downloads: '128.4K',
+    followers: '2.8K',
+    updated: { zh: '2 小时前', en: '2 hours ago' }
+  },
+  {
+    id: 'mechanical-expansion',
+    image: '/brand/vintage-story-game-logo.png',
+    name: { zh: '机械扩展', en: 'Mechanical Expansion' },
+    author: 'Stoneworks',
+    authorType: 'organization',
+    authorId: 'stoneworks',
+    description: {
+      zh: '为风车、齿轮和自动化设备加入新的组合与升级选项。',
+      en: 'Adds new combinations and upgrades for windmills, gears, and automation.'
+    },
+    tags: [
+      { zh: '科技', en: 'Technology' },
+      { zh: '服务器', en: 'Server' }
+    ],
+    downloads: '94.7K',
+    followers: '1.9K',
+    updated: { zh: '昨天', en: 'Yesterday' }
+  },
+  {
+    id: 'ancient-ruins',
+    image: '/brand/vintage-story-game-logo.png',
+    name: { zh: '远古遗迹', en: 'Ancient Ruins' },
+    author: 'Lumen Team',
+    authorType: 'organization',
+    authorId: 'lumen-team',
+    description: {
+      zh: '在世界各处加入可探索的遗迹、谜题和适合多人游玩的奖励。',
+      en: 'Introduces explorable ruins, puzzles, and rewards built for multiplayer worlds.'
+    },
+    tags: [
+      { zh: '冒险', en: 'Adventure' },
+      { zh: '探索', en: 'Exploration' }
+    ],
+    downloads: '76.2K',
+    followers: '1.4K',
+    updated: { zh: '3 天前', en: '3 days ago' }
+  },
+  {
+    id: 'natural-soundscapes',
+    image: '/brand/vintage-story-game-logo.png',
+    name: { zh: '自然音景', en: 'Natural Soundscapes' },
+    author: 'Northwind',
+    authorType: 'user',
+    authorId: 'northwind',
+    description: {
+      zh: '重新设计环境声音，让不同群系和天气拥有更清晰的氛围层次。',
+      en: 'Reworks environmental audio with clearer layers for biomes and weather.'
+    },
+    tags: [
+      { zh: '音频', en: 'Audio' },
+      { zh: '纯客户端', en: 'Client only' }
+    ],
+    downloads: '51.8K',
+    followers: '1.1K',
+    updated: { zh: '5 天前', en: '5 days ago' }
+  }
+];
 
 function getActiveType(pathname: string, queryType: string | null): ContentType {
   if (pathname === '/modpacks') return 'modpacks';
@@ -147,25 +225,28 @@ function ContentSelect({ className = '', label, value, options, onChange }: Cont
         <ChevronDown className={isOpen ? 'content-select__chevron content-select__chevron--up' : 'content-select__chevron'} size={15} strokeWidth={1.8} aria-hidden="true" />
       </button>
 
-      {isOpen ? (
-        <div className="content-select-popover" role="listbox" aria-label={label}>
-          {options.map((option) => (
-            <button
-              className={option.value === value ? 'content-select-option content-select-option--active' : 'content-select-option'}
-              key={option.value}
-              type="button"
-              role="option"
-              aria-selected={option.value === value}
-              onClick={() => {
-                onChange(option.value);
-                setIsOpen(false);
-              }}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <div
+        className={isOpen ? 'content-select-popover content-select-popover--open' : 'content-select-popover'}
+        role="listbox"
+        aria-hidden={!isOpen}
+        aria-label={label}
+      >
+        {options.map((option) => (
+          <button
+            className={option.value === value ? 'content-select-option content-select-option--active' : 'content-select-option'}
+            key={option.value}
+            type="button"
+            role="option"
+            aria-selected={option.value === value}
+            onClick={() => {
+              onChange(option.value);
+              setIsOpen(false);
+            }}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -173,36 +254,37 @@ function ContentSelect({ className = '', label, value, options, onChange }: Cont
 export function ContentBrowser() {
   const language = useSiteLanguage();
   const text = browserCopy[language];
+  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeType = getActiveType(pathname, searchParams.get('type'));
   const [query, setQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [sort, setSort] = useState('updated');
+  const [sort, setSort] = useState('relevance');
   const [perPage, setPerPage] = useState('20');
-  const [selectedFilters, setSelectedFilters] = useState<Record<string, boolean>>({});
-
   const groups = useMemo(
     () => [
-      { id: 'version', label: text.gameVersion, options: gameVersions },
-      { id: 'category', label: text.category, options: categories },
-      { id: 'environment', label: text.environment, options: environments }
+      { id: 'version', label: text.gameVersion },
+      { id: 'category', label: text.category },
+      { id: 'environment', label: text.environment }
     ],
     [text]
   );
   const sortOptions = [
-    { value: 'updated', label: text.sortUpdated },
-    { value: 'created', label: text.sortCreated },
-    { value: 'downloads', label: text.sortDownloads }
+    { value: 'relevance', label: text.sortRelevance },
+    { value: 'downloads', label: text.sortDownloads },
+    { value: 'followers', label: text.sortFollowers },
+    { value: 'published', label: text.sortPublished },
+    { value: 'updated', label: text.sortUpdated }
   ];
   const perPageOptions = ['12', '20', '40', '60'].map((value) => ({ value, label: `${value} ${text.items}` }));
 
-  function submitSearch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function openCard(modId: string) {
+    router.push(activeType === 'modpacks' ? `/modpack/${modId}` : `/mod/${modId}`);
   }
 
-  function toggleFilter(id: string) {
-    setSelectedFilters((current) => ({ ...current, [id]: !current[id] }));
+  function submitSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
   }
 
   return (
@@ -229,18 +311,6 @@ export function ContentBrowser() {
                   <span>{group.label}</span>
                   <ChevronDown size={16} strokeWidth={1.8} aria-hidden="true" />
                 </summary>
-                <div className="content-filter-options">
-                  {group.options.map((option) => (
-                    <label className="content-check" key={option.id}>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(selectedFilters[option.id])}
-                        onChange={() => toggleFilter(option.id)}
-                      />
-                      <span>{language === 'en' ? option.en : option.zh}</span>
-                    </label>
-                  ))}
-                </div>
               </details>
             ))}
           </aside>
@@ -296,12 +366,81 @@ export function ContentBrowser() {
               </div>
             </div>
 
-            <div className={`content-empty content-empty--${viewMode}`}>
-              <div className="content-empty__icon" aria-hidden="true">
-                <PackageOpen size={28} strokeWidth={1.55} />
-              </div>
-              <h2>{text.emptyTitle}</h2>
-              <p>{text.emptyDescription}</p>
+            <div className={`content-cards content-cards--${viewMode}`}>
+              {sampleMods.map((mod) => {
+                const name = language === 'en' ? mod.name.en : mod.name.zh;
+                const description = language === 'en' ? mod.description.en : mod.description.zh;
+                const updated = language === 'en' ? mod.updated.en : mod.updated.zh;
+
+                return (
+                  <article
+                    className={`content-card content-card--${viewMode} content-card--interactive`}
+                    key={mod.id}
+                    role="link"
+                    tabIndex={0}
+                    aria-label={name}
+                    onClick={() => openCard(mod.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openCard(mod.id);
+                      }
+                    }}
+                  >
+                    <div className="content-card__media">
+                      <img src={mod.image} alt={name} loading="lazy" />
+                    </div>
+
+                    <div className="content-card__body">
+                      <div className="content-card__summary">
+                        <div className="content-card__icon" aria-hidden="true">
+                          <img src={mod.image} alt="" loading="lazy" />
+                        </div>
+                        <div className="content-card__copy">
+                          <h2 className="content-card__title">
+                            <span>{name}</span>{' '}
+                            <Link
+                              className="content-card__author"
+                              href={`/${mod.authorType === 'user' ? 'user' : 'organization'}/${mod.authorId}`}
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              {text.cardBy} {mod.author}
+                            </Link>
+                          </h2>
+                          <p className="content-card__description">{description}</p>
+                        </div>
+                      </div>
+
+                      <ul className="content-card__tags" aria-label={language === 'en' ? 'Tags' : '标签'}>
+                        {mod.tags.map((tag) => (
+                          <li key={tag.en}>{language === 'en' ? tag.en : tag.zh}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <dl className="content-card__stats">
+                      <div>
+                        <dt aria-label={text.cardDownloads}>
+                          <Download size={15} strokeWidth={1.9} aria-hidden="true" />
+                        </dt>
+                        <dd>{mod.downloads}</dd>
+                      </div>
+                      <div>
+                        <dt aria-label={text.cardFollowers}>
+                          <Heart size={15} strokeWidth={1.9} aria-hidden="true" />
+                        </dt>
+                        <dd>{mod.followers}</dd>
+                      </div>
+                      <div>
+                        <dt aria-label={text.cardUpdated}>
+                          <Clock3 size={15} strokeWidth={1.9} aria-hidden="true" />
+                        </dt>
+                        <dd>{updated}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                );
+              })}
             </div>
           </section>
         </div>

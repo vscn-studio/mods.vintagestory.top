@@ -1,8 +1,8 @@
-import { ContentBrowser } from '@/components/ContentBrowser';
 import { HomeShell } from '@/components/HomeShell';
+import { MvlPage } from '@/components/MvlPage';
 import { getSitePreferences } from '@/lib/site-preferences';
 
-export default async function ModsPage() {
+export default async function MvlRoute() {
   const preferences = await getSitePreferences();
 
   return (
@@ -11,7 +11,7 @@ export default async function ModsPage() {
       initialNightMode={preferences.nightMode}
       initialSessionAccount={preferences.sessionAccount}
     >
-      <ContentBrowser />
+      <MvlPage />
     </HomeShell>
   );
 }

@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { cookies } from 'next/headers';
 import type { NextRequest, NextResponse } from 'next/server';
 
 export type AuthProvider = 'official' | 'community';
@@ -10,18 +11,107 @@ export type PendingIdentity = {
   subject: string;
   displayName: string;
   providerEmail?: string;
+  providerEmailVerified?: boolean;
   username?: string;
   playerName?: string;
   playerUid?: string;
   avatarUrl?: string;
+  groups?: string[];
 };
 
-type ModAccount = PendingIdentity & {
+export type ModAccount = PendingIdentity & {
   id: string;
   bindEmail: string;
   createdAt: string;
   lastLoginAt: string;
+  linkedIdentities?: PendingIdentity[];
 };
+
+export type SessionAccountSummary = {
+  displayName: string;
+  provider: AuthProvider;
+  avatarUrl?: string;
+  isAdmin?: boolean;
+};
+
+export type IdentityAuthenticationResult =
+  | { status: 'authenticated'; account: ModAccount }
+  | { status: 'needs-binding' }
+  | { status: 'provider-conflict'; provider: AuthProvider };
+
+export class AccountBindingConflictError extends Error {
+  constructor(readonly provider: AuthProvider) {
+    super(`The email is already bound to another ${provider} account.`);
+    this.name = 'AccountBindingConflictError';
+  }
+}
+
+export function normalizeGroups(value: unknown): string[] {
+  const values = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : [];
+  const unique = [...new Set(
+    values
+      .filter((group): group is string => typeof group === 'string')
+      .map((group) => group.trim())
+      .filter((group) => group.length > 0 && group.length <= 64)
+  )];
+  const groups: string[] = [];
+  let totalLength = 0;
+  for (const group of unique) {
+    if (groups.length >= 32 || totalLength + group.length > 2048) break;
+    groups.push(group);
+    totalLength += group.length;
+  }
+  return groups;
+}
+
+export function isCommunityAdmin(account: ModAccount): boolean {
+  const communityIdentity = accountIdentities(account).find((identity) => identity.provider === 'community');
+  if (!communityIdentity) return false;
+  const configuredGroup = (process.env.COMMUNITY_ADMIN_GROUP ?? '管理员').trim();
+  if (!configuredGroup) return false;
+  const expected = configuredGroup.toLocaleLowerCase();
+  return (communityIdentity.groups ?? []).some((group) => group.trim().toLocaleLowerCase() === expected);
+}
+
+function identityMatches(left: PendingIdentity, right: PendingIdentity): boolean {
+  return left.provider === right.provider && left.subject === right.subject;
+}
+
+type AccountIdentityFields = Pick<
+  ModAccount,
+  'provider' | 'subject' | 'displayName' | 'providerEmail' | 'providerEmailVerified' | 'username' | 'playerName' | 'playerUid' | 'avatarUrl' | 'groups' | 'linkedIdentities'
+>;
+
+function accountPrimaryIdentity(account: AccountIdentityFields): PendingIdentity {
+  return {
+    provider: account.provider,
+    subject: account.subject,
+    displayName: account.displayName,
+    providerEmail: account.providerEmail,
+    providerEmailVerified: account.providerEmailVerified,
+    username: account.username,
+    playerName: account.playerName,
+    playerUid: account.playerUid,
+    avatarUrl: account.avatarUrl,
+    groups: account.groups
+  };
+}
+
+export function accountIdentities(account: AccountIdentityFields): PendingIdentity[] {
+  const primary = accountPrimaryIdentity(account);
+  const linked = Array.isArray(account.linkedIdentities)
+    ? account.linkedIdentities.filter((identity) => identity && identity.provider && identity.subject && identity.displayName)
+    : [];
+  return [primary, ...linked];
+}
+
+export function getAccountPrimaryIdentity(account: ModAccount): PendingIdentity {
+  return accountIdentities(account).find((identity) => identity.provider === 'community') ?? accountPrimaryIdentity(account);
+}
+
+export function getAccountAvatarUrl(account: ModAccount): string | undefined {
+  return accountIdentities(account).find((identity) => identity.provider === 'community')?.avatarUrl;
+}
 
 const PENDING_COOKIE = 'mod_pending_identity';
 const SESSION_COOKIE = 'mod_session';
@@ -292,8 +382,7 @@ async function readAccounts(): Promise<ModAccount[]> {
   }
 }
 
-export async function getSessionAccount(request: NextRequest): Promise<ModAccount | null> {
-  const raw = request.cookies.get(SESSION_COOKIE)?.value;
+async function getSessionAccountByCookieValue(raw: string | undefined): Promise<ModAccount | null> {
   if (!raw) return null;
   const session = unseal<{ accountId?: string; issuedAt?: number }>(raw);
   if (!session?.accountId || !session.issuedAt || Date.now() - session.issuedAt > SESSION_TTL_SECONDS * 1000) {
@@ -301,6 +390,92 @@ export async function getSessionAccount(request: NextRequest): Promise<ModAccoun
   }
   const accounts = await readAccounts();
   return accounts.find((account) => account.id === session.accountId) ?? null;
+}
+
+export async function getSessionAccount(request: NextRequest): Promise<ModAccount | null> {
+  return getSessionAccountByCookieValue(request.cookies.get(SESSION_COOKIE)?.value);
+}
+
+export function getSessionAccountSummary(account: ModAccount): SessionAccountSummary {
+  const identity = getAccountPrimaryIdentity(account);
+  return {
+    displayName: identity.displayName,
+    provider: identity.provider,
+    avatarUrl: getAccountAvatarUrl(account),
+    isAdmin: isCommunityAdmin(account)
+  };
+}
+
+export async function getServerSessionAccountSummary(): Promise<SessionAccountSummary | null> {
+  const cookieStore = await cookies();
+  const account = await getSessionAccountByCookieValue(cookieStore.get(SESSION_COOKIE)?.value);
+  return account ? getSessionAccountSummary(account) : null;
+}
+
+export async function findModAccountByIdentity(identity: PendingIdentity): Promise<ModAccount | null> {
+  const accounts = await readAccounts();
+  return accounts.find((account) => accountIdentities(account).some((item) => identityMatches(item, identity))) ?? null;
+}
+
+function accountHasProviderIdentity(account: ModAccount, provider: AuthProvider): PendingIdentity | undefined {
+  return accountIdentities(account).find((identity) => identity.provider === provider);
+}
+
+function accountEmailMatches(account: ModAccount, email: string): boolean {
+  return normalizeEmail(account.bindEmail) === email;
+}
+
+export async function findBindingConflict(identity: PendingIdentity, bindEmail: string): Promise<ModAccount | null> {
+  const accounts = await readAccounts();
+  return (
+    accounts.find((account) => {
+      if (!accountEmailMatches(account, bindEmail)) return false;
+      const existing = accountHasProviderIdentity(account, identity.provider);
+      return Boolean(existing && existing.subject !== identity.subject);
+    }) ?? null
+  );
+}
+
+function updateAccountIdentity(account: ModAccount, identity: PendingIdentity, now: string): void {
+  const identities = accountIdentities(account);
+  const existingIndex = identities.findIndex((item) => identityMatches(item, identity));
+  if (existingIndex >= 0) {
+    identities[existingIndex] = identity;
+  } else {
+    identities.push(identity);
+  }
+
+  const preferred = identities.find((item) => item.provider === 'community') ?? identities[0];
+  Object.assign(account, preferred, {
+    linkedIdentities: identities.filter((item) => !identityMatches(item, preferred)),
+    lastLoginAt: now
+  });
+  if (account.linkedIdentities?.length === 0) delete account.linkedIdentities;
+}
+
+export async function authenticateIdentity(identity: PendingIdentity): Promise<IdentityAuthenticationResult> {
+  const accounts = await readAccounts();
+  const now = new Date().toISOString();
+  const existing = accounts.find((account) => accountIdentities(account).some((item) => identityMatches(item, identity)));
+  if (existing) {
+    updateAccountIdentity(existing, identity, now);
+    await writeAccounts(accounts);
+    return { status: 'authenticated', account: existing };
+  }
+
+  const providerEmail = normalizeEmail(identity.providerEmail);
+  const canUseProviderEmail = identity.provider === 'official' || identity.providerEmailVerified === true;
+  if (!providerEmail || !canUseProviderEmail) return { status: 'needs-binding' };
+  const emailMatches = accounts.filter((account) => accountEmailMatches(account, providerEmail));
+  if (emailMatches.some((account) => accountHasProviderIdentity(account, identity.provider))) {
+    return { status: 'provider-conflict', provider: identity.provider };
+  }
+  if (emailMatches.length !== 1) return { status: 'needs-binding' };
+
+  const target = emailMatches[0];
+  updateAccountIdentity(target, identity, now);
+  await writeAccounts(accounts);
+  return { status: 'authenticated', account: target };
 }
 
 async function writeAccounts(accounts: ModAccount[]): Promise<void> {
@@ -322,13 +497,25 @@ async function writeJsonArray<T>(file: string, values: T[]): Promise<void> {
 export async function upsertModAccount(identity: PendingIdentity, bindEmail: string): Promise<ModAccount> {
   const accounts = await readAccounts();
   const now = new Date().toISOString();
-  const existing = accounts.find(
-    (account) => account.provider === identity.provider && account.subject === identity.subject
-  );
+  const existing = accounts.find((account) => accountIdentities(account).some((item) => identityMatches(item, identity)));
   if (existing) {
-    Object.assign(existing, identity, { bindEmail, lastLoginAt: now });
+    updateAccountIdentity(existing, identity, now);
     await writeAccounts(accounts);
     return existing;
+  }
+
+  const matchingAccounts = accounts.filter((account) => accountEmailMatches(account, bindEmail));
+  if (matchingAccounts.some((account) => accountHasProviderIdentity(account, identity.provider))) {
+    throw new AccountBindingConflictError(identity.provider);
+  }
+  if (matchingAccounts.length > 1) {
+    throw new AccountBindingConflictError(identity.provider);
+  }
+  if (matchingAccounts.length === 1) {
+    const target = matchingAccounts[0];
+    updateAccountIdentity(target, identity, now);
+    await writeAccounts(accounts);
+    return target;
   }
 
   const account: ModAccount = {

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  AccountBindingConflictError,
   clearPendingIdentity,
   consumeActivationChallenge,
+  findBindingConflict,
   getPendingIdentity,
   normalizeEmail,
   setAccountSession,
@@ -37,6 +39,25 @@ export async function POST(request: NextRequest) {
       { status: 400, headers: { 'Cache-Control': 'no-store' } }
     );
   }
+
+  try {
+    if (await findBindingConflict(identity, bindEmail)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: 'EMAIL_PROVIDER_CONFLICT',
+          message: identity.provider === 'community' ? '该邮箱已绑定另外一个社区账号。' : '该邮箱已绑定另外一个游戏账号。'
+        },
+        { status: 409, headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
+  } catch {
+    return NextResponse.json(
+      { ok: false, message: '账号绑定服务暂时不可用，请稍后重试。' },
+      { status: 503, headers: { 'Cache-Control': 'no-store' } }
+    );
+  }
+
   if (!/^\d{6}$/.test(activationCode)) {
     return NextResponse.json(
       { ok: false, message: '请输入邮箱收到的 6 位验证码。' },
@@ -69,7 +90,17 @@ export async function POST(request: NextRequest) {
   let account: Awaited<ReturnType<typeof upsertModAccount>>;
   try {
     account = await upsertModAccount(identity, bindEmail);
-  } catch {
+  } catch (error) {
+    if (error instanceof AccountBindingConflictError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: 'EMAIL_PROVIDER_CONFLICT',
+          message: error.provider === 'community' ? '该邮箱已绑定另外一个社区账号。' : '该邮箱已绑定另外一个游戏账号。'
+        },
+        { status: 409, headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
     return NextResponse.json(
       { ok: false, message: '账号保存失败，请稍后重试。' },
       { status: 503, headers: { 'Cache-Control': 'no-store' } }

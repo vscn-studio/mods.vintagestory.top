@@ -8,6 +8,7 @@ export default async function HomePage() {
     <HomeShell
       initialLanguage={preferences.language}
       initialNightMode={preferences.nightMode}
+      initialSessionAccount={preferences.sessionAccount}
     />
   );
 }
