@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, Grid2X2, List } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, FolderKanban, Grid2X2, Heart, List } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
@@ -18,6 +18,12 @@ type ProfileProject = {
   name: { zh: string; en: string };
   description: { zh: string; en: string };
   tags: Array<{ zh: string; en: string }>;
+};
+
+type ProfileOrganization = {
+  id: string;
+  name: string;
+  role: { zh: string; en: string };
 };
 
 const profileProjects: Record<string, ProfileProject[]> = {
@@ -50,9 +56,21 @@ const profileProjects: Record<string, ProfileProject[]> = {
   ]
 };
 
+const profileOrganizations: Record<string, ProfileOrganization> = {
+  mira: {
+    id: 'stoneworks',
+    name: 'Stoneworks',
+    role: { zh: '成员', en: 'Member' }
+  }
+};
+
 const copy = {
   'zh-CN': {
     projectsTitle: '公开项目',
+    organization: '组织',
+    projectCount: '项目数量',
+    downloads: '下载量',
+    followers: '关注量',
     contentNavigation: '探索内容',
     mods: '模组',
     themePacks: '主题包',
@@ -69,6 +87,10 @@ const copy = {
   },
   en: {
     projectsTitle: 'Public projects',
+    organization: 'Organization',
+    projectCount: 'Projects',
+    downloads: 'Downloads',
+    followers: 'Followers',
     contentNavigation: 'Explore content',
     mods: 'Mods',
     themePacks: 'Theme packs',
@@ -106,6 +128,8 @@ export function AccountPreviewPage({ kind, id }: AccountPreviewPageProps) {
     { id: 'server', label: text.serverTweaks }
   ];
   const visibleProjects = (profileProjects[id] ?? []).filter((project) => project.type === projectType);
+  const projectCount = (profileProjects[id] ?? []).length;
+  const organization = kind === 'user' ? profileOrganizations[id] : undefined;
 
   return (
     <section className="profile-page" aria-labelledby="profile-title">
@@ -117,10 +141,25 @@ export function AccountPreviewPage({ kind, id }: AccountPreviewPageProps) {
           <div className="profile-hero__copy">
             <h1 id="profile-title">{name}</h1>
             <p>{text.placeholder}</p>
+            <dl className="profile-project-stats">
+              <div>
+                <dt aria-label={text.projectCount}><FolderKanban size={16} strokeWidth={1.9} aria-hidden="true" /></dt>
+                <dd>{projectCount}</dd>
+              </div>
+              <div>
+                <dt aria-label={text.downloads}><Download size={16} strokeWidth={1.9} aria-hidden="true" /></dt>
+                <dd>{projectCount > 0 ? '128.4K' : '0'}</dd>
+              </div>
+              <div>
+                <dt aria-label={text.followers}><Heart size={16} strokeWidth={1.9} aria-hidden="true" /></dt>
+                <dd>{projectCount > 0 ? '2.8K' : '0'}</dd>
+              </div>
+            </dl>
           </div>
         </header>
 
-        <div className="profile-projects">
+        <div className={organization ? 'profile-content-layout profile-content-layout--with-sidebar' : 'profile-content-layout'}>
+          <div className="profile-projects">
           <div className="content-toolbar profile-project-toolbar">
             <nav className="content-switcher" aria-label={text.contentNavigation}>
               {projectTabs.map((tab) => (
@@ -170,36 +209,54 @@ export function AccountPreviewPage({ kind, id }: AccountPreviewPageProps) {
             </div>
           </div>
 
-          <div className={`content-cards content-cards--${viewMode} profile-projects__content`} data-project-type={projectType} aria-label={text.projectsTitle}>
-            {visibleProjects.length > 0 ? visibleProjects.map((project) => {
-              const projectName = language === 'en' ? project.name.en : project.name.zh;
-              const projectDescription = language === 'en' ? project.description.en : project.description.zh;
-              return (
-                <Link className={`content-card content-card--${viewMode} content-card--interactive`} href={`/${project.type === 'modpacks' ? 'modpack' : 'mod'}/${project.id}`} key={project.id}>
-                  <div className="content-card__media">
-                    <img src="/brand/vintage-story-game-logo.png" alt={projectName} loading="lazy" />
-                  </div>
-                  <div className="content-card__body">
-                    <div className="content-card__summary">
-                      <div className="content-card__icon" aria-hidden="true">
-                        <img src="/brand/vintage-story-game-logo.png" alt="" loading="lazy" />
-                      </div>
-                      <div className="content-card__copy">
-                        <h2 className="content-card__title">
-                          <span>{projectName}</span>{' '}
-                          <span className="content-card__author">by {name}</span>
-                        </h2>
-                        <p className="content-card__description">{projectDescription}</p>
-                      </div>
+            <div className={`content-cards content-cards--${viewMode} profile-projects__content`} data-project-type={projectType} aria-label={text.projectsTitle}>
+              {visibleProjects.length > 0 ? visibleProjects.map((project) => {
+                const projectName = language === 'en' ? project.name.en : project.name.zh;
+                const projectDescription = language === 'en' ? project.description.en : project.description.zh;
+                return (
+                  <Link className={`content-card content-card--${viewMode} content-card--interactive`} href={`/${project.type === 'modpacks' ? 'modpack' : 'mod'}/${project.id}`} key={project.id}>
+                    <div className="content-card__media">
+                      <img src="/brand/vintage-story-game-logo.png" alt={projectName} loading="lazy" />
                     </div>
-                    <ul className="content-card__tags" aria-label={language === 'en' ? 'Tags' : '标签'}>
-                      {project.tags.map((tag) => <li key={tag.en}>{language === 'en' ? tag.en : tag.zh}</li>)}
-                    </ul>
-                  </div>
-                </Link>
-              );
-            }) : <p className="profile-projects__empty">{text.noProjects}</p>}
+                    <div className="content-card__body">
+                      <div className="content-card__summary">
+                        <div className="content-card__icon" aria-hidden="true">
+                          <img src="/brand/vintage-story-game-logo.png" alt="" loading="lazy" />
+                        </div>
+                        <div className="content-card__copy">
+                          <h2 className="content-card__title">
+                            <span>{projectName}</span>{' '}
+                            <span className="content-card__author">by {name}</span>
+                          </h2>
+                          <p className="content-card__description">{projectDescription}</p>
+                        </div>
+                      </div>
+                      <ul className="content-card__tags" aria-label={language === 'en' ? 'Tags' : '标签'}>
+                        {project.tags.map((tag) => <li key={tag.en}>{language === 'en' ? tag.en : tag.zh}</li>)}
+                      </ul>
+                    </div>
+                  </Link>
+                );
+              }) : <p className="profile-projects__empty">{text.noProjects}</p>}
+            </div>
           </div>
+
+          {organization ? (
+            <aside className="profile-organization-card">
+              <div className="preview-owner-card__heading">
+                <h2>{text.organization}</h2>
+              </div>
+              <Link className="preview-owner-card__identity" href={`/organization/${organization.id}`}>
+                <span className="preview-owner-card__avatar">
+                  <img src="/brand/logo-icon-rounded.svg" alt="" />
+                </span>
+                <span className="preview-owner-card__name">
+                  <strong>{organization.name}</strong>
+                  <span>{language === 'en' ? organization.role.en : organization.role.zh}</span>
+                </span>
+              </Link>
+            </aside>
+          ) : null}
         </div>
       </div>
     </section>

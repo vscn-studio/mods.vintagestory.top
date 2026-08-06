@@ -1,16 +1,16 @@
 'use client';
 
-import { ArrowLeft, BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, Coffee, Copy, Download, EllipsisVertical, Flag, GitBranch, Heart, MessageCircle } from 'lucide-react';
+import { BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, Coffee, Copy, Download, EllipsisVertical, Flag, GitBranch, Heart, MessageCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
+import { type PreviewSection } from '@/lib/preview-sections';
 
 type ContentPreviewPageProps = {
   kind: 'mod' | 'modpack';
   id: string;
+  initialSection?: PreviewSection;
 };
-
-type PreviewSection = 'description' | 'screenshots' | 'changelog' | 'versions';
 
 type PreviewMember = {
   id: string;
@@ -93,7 +93,6 @@ const contentData: Record<string, PreviewContent> = {
 
 const previewCopy = {
   'zh-CN': {
-    back: '返回内容',
     author: '作者',
     ownerRole: '所有者',
     organizationRole: '组织',
@@ -137,7 +136,6 @@ const previewCopy = {
     versionValue: '1.21 · 1.22'
   },
   en: {
-    back: 'Back to content',
     author: 'Author',
     ownerRole: 'Owner',
     organizationRole: 'Organization',
@@ -190,17 +188,18 @@ function titleFromId(id: string): string {
     .join(' ');
 }
 
-export function ContentPreviewPage({ kind, id }: ContentPreviewPageProps) {
+export function ContentPreviewPage({ kind, id, initialSection }: ContentPreviewPageProps) {
   const language = useSiteLanguage();
   const text = previewCopy[language];
   const [isMoreOpen, setIsMoreOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState<PreviewSection>('description');
+  const [activeSection, setActiveSection] = useState<PreviewSection>(initialSection ?? 'description');
   const [isVersionFilterOpen, setIsVersionFilterOpen] = useState(false);
   const [selectedVersions, setSelectedVersions] = useState<string[]>([]);
   const [openReleaseMenu, setOpenReleaseMenu] = useState<string | null>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const versionFilterRef = useRef<HTMLDivElement>(null);
   const releaseMenuRef = useRef<HTMLDivElement>(null);
+  const basePath = kind === 'modpack' ? `/modpack/${id}` : `/mod/${id}`;
 
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {
@@ -225,6 +224,24 @@ export function ContentPreviewPage({ kind, id }: ContentPreviewPageProps) {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
+
+  useEffect(() => {
+    function handlePopState() {
+      const path = window.location.pathname.replace(/\/$/, '');
+      if (path === `${basePath}/screenshots`) {
+        setActiveSection('screenshots');
+      } else if (path === `${basePath}/changelog`) {
+        setActiveSection('changelog');
+      } else if (path === `${basePath}/versions`) {
+        setActiveSection('versions');
+      } else {
+        setActiveSection('description');
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [basePath]);
 
   const fallback = {
     name: { zh: titleFromId(id), en: titleFromId(id) },
@@ -262,10 +279,10 @@ export function ContentPreviewPage({ kind, id }: ContentPreviewPageProps) {
     { id: 'versions', label: text.versions }
   ];
   const sectionHrefs: Record<PreviewSection, string> = {
-    description: '#preview-panel-description',
-    screenshots: '/screenshots',
-    changelog: '/changelog',
-    versions: '/versions'
+    description: basePath,
+    screenshots: `${basePath}/screenshots`,
+    changelog: `${basePath}/changelog`,
+    versions: `${basePath}/versions`
   };
   const screenshotCards = language === 'en'
     ? ['In-world overview', 'Mechanical details', 'Automation setup']
@@ -350,11 +367,6 @@ export function ContentPreviewPage({ kind, id }: ContentPreviewPageProps) {
   return (
     <section className="preview-page" aria-labelledby="preview-title">
       <div className="preview-page__inner">
-        <Link className="preview-page__back" href={kind === 'modpack' ? '/modpacks' : '/mods'}>
-          <ArrowLeft size={17} strokeWidth={1.9} aria-hidden="true" />
-          <span>{text.back}</span>
-        </Link>
-
         <header className="preview-hero">
           <div className="preview-hero__media-column">
             <div className="preview-hero__media">
@@ -434,6 +446,7 @@ export function ContentPreviewPage({ kind, id }: ContentPreviewPageProps) {
               aria-current={activeSection === tab.id ? 'page' : undefined}
               onClick={(event) => {
                 event.preventDefault();
+                window.history.pushState({}, '', sectionHrefs[tab.id]);
                 setActiveSection(tab.id);
               }}
             >
