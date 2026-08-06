@@ -1,8 +1,10 @@
 'use client';
 
 import {
+  Box,
   Bell,
   Boxes,
+  Building2,
   ChevronDown,
   Compass,
   Download,
@@ -16,17 +18,18 @@ import {
   Moon,
   Package,
   Palette,
+  Plus,
   Settings,
   ServerCog,
   ShieldCheck,
   Sun,
-  Upload,
   UsersRound,
   X,
   type LucideIcon
 } from 'lucide-react';
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AuthModal, type AuthProvider, type SiteLanguage } from '@/components/AuthModal';
+import { CreateProjectModal } from '@/components/CreateProjectModal';
 import { SiteLanguageContext } from '@/components/SiteLanguageContext';
 import type { SessionAccountSummary } from '@/lib/auth-server';
 
@@ -84,8 +87,11 @@ const siteCopy = {
     mainNavigation: '主导航',
     explore: '探索内容',
     exploreCategories: '探索内容分类',
+    submitOptions: '发布选项',
+    createProject: '新建项目',
+    createOrganization: '新建组织',
     mvl: '获取 MVL',
-    submit: '提交模组',
+    submit: '发布',
     translations: '汉化计划',
     heroIconAlt: '复古物语中文社区图标',
     heroTitle: '汇聚复古物语各类模组',
@@ -121,8 +127,11 @@ const siteCopy = {
     mainNavigation: 'Main navigation',
     explore: 'Explore content',
     exploreCategories: 'Explore content categories',
+    submitOptions: 'Publish options',
+    createProject: 'New project',
+    createOrganization: 'New organization',
     mvl: 'Get MVL',
-    submit: 'Submit a mod',
+    submit: 'Publish',
     translations: 'Translation project',
     heroIconAlt: 'Vintage Story Chinese community icon',
     heroTitle: 'A hub for Vintage Story mods',
@@ -159,6 +168,7 @@ export function HomeShell({
   initialSessionAccount = null
 }: HomeShellProps) {
   const [isExploreOpen, setIsExploreOpen] = useState(false);
+  const [isSubmitOpen, setIsSubmitOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNightMode, setIsNightMode] = useState(initialNightMode);
   const [language, setLanguage] = useState<SiteLanguage>(initialLanguage);
@@ -168,7 +178,9 @@ export function HomeShell({
   const [authProvider, setAuthProvider] = useState<AuthProvider | null>(null);
   const [communityReady, setCommunityReady] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const exploreRef = useRef<HTMLDivElement>(null);
+  const submitRef = useRef<HTMLDivElement>(null);
   const languageRef = useRef<HTMLDivElement>(null);
   const accountRef = useRef<HTMLDivElement>(null);
 
@@ -176,6 +188,9 @@ export function HomeShell({
     function handlePointerDown(event: PointerEvent) {
       if (!exploreRef.current?.contains(event.target as Node)) {
         setIsExploreOpen(false);
+      }
+      if (!submitRef.current?.contains(event.target as Node)) {
+        setIsSubmitOpen(false);
       }
       if (!languageRef.current?.contains(event.target as Node)) {
         setIsLanguageOpen(false);
@@ -188,6 +203,7 @@ export function HomeShell({
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         setIsExploreOpen(false);
+        setIsSubmitOpen(false);
         setIsLanguageOpen(false);
         setIsAccountOpen(false);
         setIsMenuOpen(false);
@@ -317,10 +333,63 @@ export function HomeShell({
 
           <div className="site-header__actions">
             {sessionAccount ? (
-              <a className="header-submit-button" href="/submit" title={text.submit} onClick={() => setIsMenuOpen(false)}>
-                <Upload size={16} strokeWidth={1.9} aria-hidden="true" />
-                <span className="header-submit-button__label">{text.submit}</span>
-              </a>
+              <div
+                className="explore-menu header-submit-menu"
+                ref={submitRef}
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                    setIsSubmitOpen(false);
+                  }
+                }}
+              >
+                <button
+                  className="header-submit-button"
+                  type="button"
+                  title={text.submit}
+                  aria-expanded={isSubmitOpen}
+                  aria-haspopup="menu"
+                  onClick={() => setIsSubmitOpen((open) => !open)}
+                >
+                  <Plus size={16} strokeWidth={1.9} aria-hidden="true" />
+                  <span className="header-submit-button__label">{text.submit}</span>
+                </button>
+
+                <div
+                  className={isSubmitOpen ? 'explore-popover explore-popover--open' : 'explore-popover'}
+                  role="menu"
+                  aria-hidden={!isSubmitOpen}
+                  aria-label={text.submitOptions}
+                >
+                  <div className="explore-list">
+                    <button
+                      className="explore-item"
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setIsSubmitOpen(false);
+                        setIsCreateProjectOpen(true);
+                        setIsMenuOpen(false);
+                        setIsAccountOpen(false);
+                      }}
+                    >
+                      <Box size={18} strokeWidth={2} aria-hidden="true" />
+                      <span>{text.createProject}</span>
+                    </button>
+                    <button
+                      className="explore-item"
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setIsSubmitOpen(false);
+                        setIsMenuOpen(false);
+                      }}
+                    >
+                      <Building2 size={18} strokeWidth={2} aria-hidden="true" />
+                      <span>{text.createOrganization}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
             ) : null}
 
             <button
@@ -615,6 +684,13 @@ export function HomeShell({
           onAuthenticated={() => void refreshSession()}
           onProviderChange={switchAuthProvider}
           onClose={closeAuth}
+        />
+      ) : null}
+      {isCreateProjectOpen ? (
+        <CreateProjectModal
+          username={sessionAccount?.username ?? sessionAccount?.displayName ?? ''}
+          organizations={sessionAccount?.organizations ?? []}
+          onClose={() => setIsCreateProjectOpen(false)}
         />
       ) : null}
       </div>

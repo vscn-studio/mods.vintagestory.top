@@ -25,13 +25,16 @@ export type ModAccount = PendingIdentity & {
   createdAt: string;
   lastLoginAt: string;
   linkedIdentities?: PendingIdentity[];
+  organizations?: string[];
 };
 
 export type SessionAccountSummary = {
   displayName: string;
+  username: string;
   provider: AuthProvider;
   avatarUrl?: string;
   isAdmin?: boolean;
+  organizations: string[];
 };
 
 export type IdentityAuthenticationResult =
@@ -62,6 +65,16 @@ export function normalizeGroups(value: unknown): string[] {
     totalLength += group.length;
   }
   return groups;
+}
+
+export function normalizeOrganizationNames(value: unknown): string[] {
+  const values = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : [];
+  return [...new Set(
+    values
+      .filter((organization): organization is string => typeof organization === 'string')
+      .map((organization) => organization.trim())
+      .filter((organization) => organization.length > 0 && organization.length <= 80)
+  )].slice(0, 64);
 }
 
 export function isCommunityAdmin(account: ModAccount): boolean {
@@ -121,6 +134,7 @@ const ACTIVATION_CODE_TTL_MS = 10 * 60 * 1000;
 const ACTIVATION_RESEND_COOLDOWN_MS = 60 * 1000;
 const ACTIVATION_MAX_ATTEMPTS = 5;
 const developmentSecret = randomBytes(32).toString('hex');
+const developmentAccountTimestamp = '1970-01-01T00:00:00.000Z';
 
 type ActivationChallenge = {
   id: string;
@@ -392,7 +406,39 @@ async function getSessionAccountByCookieValue(raw: string | undefined): Promise<
   return accounts.find((account) => account.id === session.accountId) ?? null;
 }
 
+function environmentFlag(value: string | undefined): boolean {
+  return ['1', 'true', 'yes', 'on'].includes((value ?? '').trim().toLowerCase());
+}
+
+function getDevelopmentAccount(): ModAccount | null {
+  if (process.env.NODE_ENV !== 'development' || !environmentFlag(process.env.MOD_AUTH_DEV_ACCOUNT_ENABLED)) {
+    return null;
+  }
+
+  const displayName = (process.env.MOD_AUTH_DEV_ACCOUNT_NAME ?? '本地开发账号').trim() || '本地开发账号';
+  const username = (process.env.MOD_AUTH_DEV_ACCOUNT_USERNAME ?? 'local-dev').trim() || 'local-dev';
+  const bindEmail = (process.env.MOD_AUTH_DEV_ACCOUNT_EMAIL ?? 'dev@localhost.test').trim() || 'dev@localhost.test';
+  const adminGroup = (process.env.COMMUNITY_ADMIN_GROUP ?? '管理员').trim();
+  const groups = environmentFlag(process.env.MOD_AUTH_DEV_ACCOUNT_ADMIN) && adminGroup ? [adminGroup] : [];
+
+  return {
+    id: 'mod_local_development',
+    provider: 'community',
+    subject: `local-development:${username}`,
+    displayName,
+    username,
+    providerEmail: bindEmail,
+    providerEmailVerified: true,
+    bindEmail,
+    groups,
+    createdAt: developmentAccountTimestamp,
+    lastLoginAt: developmentAccountTimestamp
+  };
+}
+
 export async function getSessionAccount(request: NextRequest): Promise<ModAccount | null> {
+  const developmentAccount = getDevelopmentAccount();
+  if (developmentAccount) return developmentAccount;
   return getSessionAccountByCookieValue(request.cookies.get(SESSION_COOKIE)?.value);
 }
 
@@ -400,13 +446,17 @@ export function getSessionAccountSummary(account: ModAccount): SessionAccountSum
   const identity = getAccountPrimaryIdentity(account);
   return {
     displayName: identity.displayName,
+    username: identity.username ?? identity.displayName,
     provider: identity.provider,
     avatarUrl: getAccountAvatarUrl(account),
-    isAdmin: isCommunityAdmin(account)
+    isAdmin: isCommunityAdmin(account),
+    organizations: normalizeOrganizationNames(account.organizations)
   };
 }
 
 export async function getServerSessionAccountSummary(): Promise<SessionAccountSummary | null> {
+  const developmentAccount = getDevelopmentAccount();
+  if (developmentAccount) return getSessionAccountSummary(developmentAccount);
   const cookieStore = await cookies();
   const account = await getSessionAccountByCookieValue(cookieStore.get(SESSION_COOKIE)?.value);
   return account ? getSessionAccountSummary(account) : null;

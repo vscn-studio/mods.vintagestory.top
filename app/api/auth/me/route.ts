@@ -3,7 +3,8 @@ import {
   getAccountAvatarUrl,
   getAccountPrimaryIdentity,
   getSessionAccount,
-  isCommunityAdmin
+  isCommunityAdmin,
+  normalizeOrganizationNames
 } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
@@ -18,11 +19,12 @@ export async function GET(request: NextRequest) {
       id: account.id,
       provider: identity.provider,
       displayName: identity.displayName,
+      username: identity.username ?? identity.displayName,
       bindEmail: account.bindEmail,
       playerName: identity.playerName,
-      username: identity.username,
       avatarUrl: getAccountAvatarUrl(account),
-      isAdmin: isCommunityAdmin(account)
+      isAdmin: isCommunityAdmin(account),
+      organizations: normalizeOrganizationNames(account.organizations)
     }
   });
 }
