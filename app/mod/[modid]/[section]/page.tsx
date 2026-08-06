@@ -15,7 +15,7 @@ export default async function ModPreviewSectionRoute({ params }: { params: Promi
       initialNightMode={preferences.nightMode}
       initialSessionAccount={preferences.sessionAccount}
     >
-      <ContentPreviewPage kind="mod" id={modid} initialSection={section} />
+      <ContentPreviewPage kind="mod" id={modid} initialSection={section} sessionAccount={preferences.sessionAccount} />
     </HomeShell>
   );
 }

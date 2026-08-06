@@ -11,7 +11,7 @@ export default async function ModPreviewRoute({ params }: { params: Promise<{ mo
       initialNightMode={preferences.nightMode}
       initialSessionAccount={preferences.sessionAccount}
     >
-      <ContentPreviewPage kind="mod" id={modid} />
+      <ContentPreviewPage kind="mod" id={modid} sessionAccount={preferences.sessionAccount} />
     </HomeShell>
   );
 }

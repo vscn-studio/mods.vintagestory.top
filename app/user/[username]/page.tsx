@@ -11,7 +11,7 @@ export default async function UserPreviewRoute({ params }: { params: Promise<{ u
       initialNightMode={preferences.nightMode}
       initialSessionAccount={preferences.sessionAccount}
     >
-      <AccountPreviewPage kind="user" id={username} />
+      <AccountPreviewPage kind="user" id={username} sessionAccount={preferences.sessionAccount} />
     </HomeShell>
   );
 }

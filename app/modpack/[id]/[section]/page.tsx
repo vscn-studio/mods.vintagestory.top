@@ -15,7 +15,7 @@ export default async function ModpackPreviewSectionRoute({ params }: { params: P
       initialNightMode={preferences.nightMode}
       initialSessionAccount={preferences.sessionAccount}
     >
-      <ContentPreviewPage kind="modpack" id={id} initialSection={section} />
+      <ContentPreviewPage kind="modpack" id={id} initialSection={section} sessionAccount={preferences.sessionAccount} />
     </HomeShell>
   );
 }

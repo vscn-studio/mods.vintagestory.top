@@ -1,15 +1,17 @@
 'use client';
 
-import { BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, Coffee, Copy, Download, EllipsisVertical, Flag, GitBranch, Heart, MessageCircle } from 'lucide-react';
+import { BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, Coffee, Copy, Download, EllipsisVertical, Flag, GitBranch, Heart, MessageCircle, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
+import type { SessionAccountSummary } from '@/lib/auth-server';
 import { type PreviewSection } from '@/lib/preview-sections';
 
 type ContentPreviewPageProps = {
   kind: 'mod' | 'modpack';
   id: string;
   initialSection?: PreviewSection;
+  sessionAccount?: SessionAccountSummary | null;
 };
 
 type PreviewMember = {
@@ -38,58 +40,7 @@ type PreviewContent = {
   updated?: PreviewLocalizedValue;
 };
 
-const contentData: Record<string, PreviewContent> = {
-  wildcraft: {
-    name: { zh: '荒野工艺', en: 'Wildcraft' },
-    author: 'Mira',
-    authorType: 'user' as const,
-    authorId: 'mira',
-    description: {
-      zh: '扩展野外采集、制作与生存路线，让每次远行都有新的发现。',
-      en: 'Expands gathering, crafting, and survival paths for more rewarding expeditions.'
-    }
-  },
-  'mechanical-expansion': {
-    name: { zh: '机械扩展', en: 'Mechanical Expansion' },
-    author: 'Stoneworks',
-    authorType: 'organization' as const,
-    authorId: 'stoneworks',
-    members: [
-      { id: 'aria', name: 'Aria', role: { zh: '创始人', en: 'Founder' } },
-      { id: 'toma', name: 'Toma', role: { zh: '维护者', en: 'Maintainer' } },
-      { id: 'nox', name: 'Nox', role: { zh: '贡献者', en: 'Contributor' } }
-    ],
-    description: {
-      zh: '为风车、齿轮和自动化设备加入新的组合与升级选项。',
-      en: 'Adds new combinations and upgrades for windmills, gears, and automation.'
-    }
-  },
-  'ancient-ruins': {
-    name: { zh: '远古遗迹', en: 'Ancient Ruins' },
-    author: 'Lumen Team',
-    authorType: 'organization' as const,
-    authorId: 'lumen-team',
-    members: [
-      { id: 'lumen', name: 'Lumen', role: { zh: '负责人', en: 'Lead' } },
-      { id: 'cinder', name: 'Cinder', role: { zh: '设计者', en: 'Designer' } },
-      { id: 'rui', name: 'Rui', role: { zh: '汉化维护', en: 'Translator' } }
-    ],
-    description: {
-      zh: '在世界各处加入可探索的遗迹、谜题和适合多人游玩的奖励。',
-      en: 'Introduces explorable ruins, puzzles, and rewards built for multiplayer worlds.'
-    }
-  },
-  'natural-soundscapes': {
-    name: { zh: '自然音景', en: 'Natural Soundscapes' },
-    author: 'Northwind',
-    authorType: 'user' as const,
-    authorId: 'northwind',
-    description: {
-      zh: '重新设计环境声音，让不同群系和天气拥有更清晰的氛围层次。',
-      en: 'Reworks environmental audio with clearer layers for biomes and weather.'
-    }
-  }
-} as const;
+const contentData: Record<string, PreviewContent> = {};
 
 const previewCopy = {
   'zh-CN': {
@@ -102,6 +53,7 @@ const previewCopy = {
     follow: '关注',
     download: '下载',
     moreActions: '更多操作',
+    edit: '编辑',
     report: '举报',
     copyLink: '复制链接',
     description: '简介',
@@ -133,6 +85,7 @@ const previewCopy = {
     serverOnly: '纯服务器',
     bothSides: '双端',
     placeholder: '详细内容接入后将在这里显示。',
+    noData: '暂无内容。',
     versionValue: '1.21 · 1.22'
   },
   en: {
@@ -145,6 +98,7 @@ const previewCopy = {
     follow: 'Follow',
     download: 'Download',
     moreActions: 'More actions',
+    edit: 'Edit',
     report: 'Report',
     copyLink: 'Copy link',
     description: 'Description',
@@ -176,6 +130,7 @@ const previewCopy = {
     serverOnly: 'Server only',
     bothSides: 'Client + server',
     placeholder: 'Detailed content will appear here when connected.',
+    noData: 'No content yet.',
     versionValue: '1.21 · 1.22'
   }
 } as const;
@@ -188,7 +143,11 @@ function titleFromId(id: string): string {
     .join(' ');
 }
 
-export function ContentPreviewPage({ kind, id, initialSection }: ContentPreviewPageProps) {
+function profileId(value: string): string {
+  return value.trim().toLocaleLowerCase().replace(/\s+/g, '-');
+}
+
+export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = null }: ContentPreviewPageProps) {
   const language = useSiteLanguage();
   const text = previewCopy[language];
   const [isMoreOpen, setIsMoreOpen] = useState(false);
@@ -254,16 +213,16 @@ export function ContentPreviewPage({ kind, id, initialSection }: ContentPreviewP
   const name = language === 'en' ? content.name.en : content.name.zh;
   const description = language === 'en' ? content.description.en : content.description.zh;
   const authorPath = content.authorType === 'user' ? `/user/${content.authorId}` : `/organization/${content.authorId}`;
+  const canEditContent = content.authorType === 'user'
+    ? profileId(sessionAccount?.username ?? '') === profileId(content.authorId)
+    : Boolean(sessionAccount?.ownedOrganizations.some((organizationName) => profileId(organizationName) === profileId(content.authorId)));
   const members = content.members ?? [];
-  const compatibleVersions = content.compatibleVersions ?? ['1.21', '1.22'];
-  const runtimeEnvironments = content.environments ?? [{ zh: text.bothSides, en: text.bothSides }];
-  const sidebarTags = content.tags ?? [
-    { zh: kind === 'modpack' ? '整合包' : '生存', en: kind === 'modpack' ? 'Modpack' : 'Survival' },
-    { zh: '社区创作', en: 'Community' }
-  ];
-  const license = content.license ?? { zh: 'MIT', en: 'MIT' };
-  const published = content.published ?? { zh: '2026-06-14', en: '2026-06-14' };
-  const updated = content.updated ?? { zh: '2026-07-28', en: '2026-07-28' };
+  const compatibleVersions = content.compatibleVersions ?? [];
+  const runtimeEnvironments = content.environments ?? [];
+  const sidebarTags = content.tags ?? [];
+  const license = content.license ?? { zh: text.placeholder, en: text.placeholder };
+  const published = content.published ?? { zh: text.placeholder, en: text.placeholder };
+  const updated = content.updated ?? { zh: text.placeholder, en: text.placeholder };
   const repositoryUrl = `https://github.com/scgm0/${id}`;
   const relatedLinks = [
     { id: 'source', label: text.sourceCode, href: repositoryUrl },
@@ -284,27 +243,9 @@ export function ContentPreviewPage({ kind, id, initialSection }: ContentPreviewP
     changelog: `${basePath}/changelog`,
     versions: `${basePath}/versions`
   };
-  const screenshotCards = language === 'en'
-    ? ['In-world overview', 'Mechanical details', 'Automation setup']
-    : ['游戏内场景', '机械结构细节', '自动化布局'];
-  const changelogEntries = language === 'en'
-    ? [
-        { version: '1.0.1', date: '2026-07-28', summary: 'Improves gear performance and updates multiplayer compatibility.' },
-        { version: '1.0.0', date: '2026-06-14', summary: 'Initial release with windmill and mechanical power systems.' }
-      ]
-    : [
-        { version: '1.0.1', date: '2026-07-28', summary: '优化齿轮性能，并更新多人游戏兼容性。' },
-        { version: '1.0.0', date: '2026-06-14', summary: '首次发布，加入风车与机械动力系统。' }
-      ];
-  const versionEntries = language === 'en'
-    ? [
-        { version: '1.0.1', game: '1.21 · 1.22', published: '2026-07-28', updated: '2026-07-28', downloads: '24.8K' },
-        { version: '1.0.0', game: '1.21', published: '2026-06-14', updated: '2026-06-18', downloads: '18.2K' }
-      ]
-    : [
-        { version: '1.0.1', game: '1.21 · 1.22', published: '2026-07-28', updated: '2026-07-28', downloads: '24.8K' },
-        { version: '1.0.0', game: '1.21', published: '2026-06-14', updated: '2026-06-18', downloads: '18.2K' }
-      ];
+  const screenshotCards: string[] = [];
+  const changelogEntries: Array<{ version: string; date: string; summary: string }> = [];
+  const versionEntries: Array<{ version: string; game: string; published: string; updated: string; downloads: string }> = [];
   const gameVersionOptions = ['1.22', '1.21', '1.20'];
   const selectedVersionLabel = selectedVersions.length > 0 ? selectedVersions.join(' · ') : text.allVersions;
 
@@ -424,6 +365,12 @@ export function ContentPreviewPage({ kind, id, initialSection }: ContentPreviewP
                 role="menu"
                 aria-hidden={!isMoreOpen}
               >
+                {canEditContent ? (
+                  <button className="preview-more__item" type="button" role="menuitem" onClick={() => setIsMoreOpen(false)}>
+                    <Pencil size={16} strokeWidth={1.9} aria-hidden="true" />
+                    {text.edit}
+                  </button>
+                ) : null}
                 <button className="preview-more__item preview-more__item--danger" type="button" role="menuitem" onClick={() => setIsMoreOpen(false)}>
                   <Flag size={16} strokeWidth={1.9} aria-hidden="true" />
                   {text.report}
@@ -468,7 +415,7 @@ export function ContentPreviewPage({ kind, id, initialSection }: ContentPreviewP
 
             {activeSection === 'screenshots' ? (
               <section className="preview-section">
-                <div className="preview-screenshot-grid">
+                {screenshotCards.length > 0 ? <div className="preview-screenshot-grid">
                   {screenshotCards.map((caption) => (
                     <figure className="preview-screenshot-card" key={caption}>
                       <div className="preview-screenshot-card__media">
@@ -477,13 +424,13 @@ export function ContentPreviewPage({ kind, id, initialSection }: ContentPreviewP
                       <figcaption>{caption}</figcaption>
                     </figure>
                   ))}
-                </div>
+                </div> : <p className="preview-empty-state">{text.noData}</p>}
               </section>
             ) : null}
 
             {activeSection === 'changelog' ? (
               <section className="preview-section">
-                <div className="preview-changelog-list">
+                {changelogEntries.length > 0 ? <div className="preview-changelog-list">
                   {changelogEntries.map((entry) => (
                     <article className="preview-changelog-item" key={entry.version}>
                       <div className="preview-changelog-item__heading">
@@ -499,7 +446,7 @@ export function ContentPreviewPage({ kind, id, initialSection }: ContentPreviewP
                       <p>{entry.summary}</p>
                     </article>
                   ))}
-                </div>
+                </div> : <p className="preview-empty-state">{text.noData}</p>}
               </section>
             ) : null}
 
@@ -518,7 +465,7 @@ export function ContentPreviewPage({ kind, id, initialSection }: ContentPreviewP
                       </tr>
                     </thead>
                     <tbody>
-                      {versionEntries.map((entry) => (
+                      {versionEntries.length > 0 ? versionEntries.map((entry) => (
                         <tr key={entry.version}>
                           <th scope="row"><strong>v{entry.version}</strong></th>
                           <td>
@@ -569,7 +516,7 @@ export function ContentPreviewPage({ kind, id, initialSection }: ContentPreviewP
                             </div>
                           </td>
                         </tr>
-                      ))}
+                      )) : <tr><td colSpan={7} className="preview-empty-state">{text.noData}</td></tr>}
                     </tbody>
                   </table>
               </section>
@@ -587,7 +534,7 @@ export function ContentPreviewPage({ kind, id, initialSection }: ContentPreviewP
                   <dt>{text.compatibleVersions}</dt>
                   <dd>
                     <ul className="preview-sidebar-tags preview-sidebar-tags--compact" aria-label={text.compatibleVersions}>
-                      {compatibleVersions.map((version) => <li key={version}>{version}</li>)}
+                      {compatibleVersions.length > 0 ? compatibleVersions.map((version) => <li key={version}>{version}</li>) : <li>{text.noData}</li>}
                     </ul>
                   </dd>
                 </div>
@@ -595,7 +542,7 @@ export function ContentPreviewPage({ kind, id, initialSection }: ContentPreviewP
                   <dt>{text.runtimeEnvironment}</dt>
                   <dd>
                     <ul className="preview-sidebar-tags preview-sidebar-tags--compact" aria-label={text.runtimeEnvironment}>
-                      {runtimeEnvironments.map((environment) => <li key={language === 'en' ? environment.en : environment.zh}>{language === 'en' ? environment.en : environment.zh}</li>)}
+                      {runtimeEnvironments.length > 0 ? runtimeEnvironments.map((environment) => <li key={language === 'en' ? environment.en : environment.zh}>{language === 'en' ? environment.en : environment.zh}</li>) : <li>{text.noData}</li>}
                     </ul>
                   </dd>
                 </div>
@@ -662,8 +609,8 @@ export function ContentPreviewPage({ kind, id, initialSection }: ContentPreviewP
                 <h2>{text.tags}</h2>
               </div>
               <ul className="preview-sidebar-tags" aria-label={text.tags}>
-                {sidebarTags.map((tag) => <li key={language === 'en' ? tag.en : tag.zh}>{language === 'en' ? tag.en : tag.zh}</li>)}
-                <li>{compatibleVersions.join(' · ')}</li>
+                {sidebarTags.length > 0 ? sidebarTags.map((tag) => <li key={language === 'en' ? tag.en : tag.zh}>{language === 'en' ? tag.en : tag.zh}</li>) : <li>{text.noData}</li>}
+                {compatibleVersions.length > 0 ? <li>{compatibleVersions.join(' · ')}</li> : null}
               </ul>
             </section>
 

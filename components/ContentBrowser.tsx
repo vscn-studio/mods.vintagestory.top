@@ -91,84 +91,7 @@ type SampleMod = {
   updated: { zh: string; en: string };
 };
 
-const sampleMods: SampleMod[] = [
-  {
-    id: 'wildcraft',
-    image: '/brand/vintage-story-game-logo.png',
-    name: { zh: '荒野工艺', en: 'Wildcraft' },
-    author: 'Mira',
-    authorType: 'user',
-    authorId: 'mira',
-    description: {
-      zh: '扩展野外采集、制作与生存路线，让每次远行都有新的发现。',
-      en: 'Expands gathering, crafting, and survival paths for more rewarding expeditions.'
-    },
-    tags: [
-      { zh: '生存', en: 'Survival' },
-      { zh: '双端', en: 'Both sides' }
-    ],
-    downloads: '128.4K',
-    followers: '2.8K',
-    updated: { zh: '2 小时前', en: '2 hours ago' }
-  },
-  {
-    id: 'mechanical-expansion',
-    image: '/brand/vintage-story-game-logo.png',
-    name: { zh: '机械扩展', en: 'Mechanical Expansion' },
-    author: 'Stoneworks',
-    authorType: 'organization',
-    authorId: 'stoneworks',
-    description: {
-      zh: '为风车、齿轮和自动化设备加入新的组合与升级选项。',
-      en: 'Adds new combinations and upgrades for windmills, gears, and automation.'
-    },
-    tags: [
-      { zh: '科技', en: 'Technology' },
-      { zh: '服务器', en: 'Server' }
-    ],
-    downloads: '94.7K',
-    followers: '1.9K',
-    updated: { zh: '昨天', en: 'Yesterday' }
-  },
-  {
-    id: 'ancient-ruins',
-    image: '/brand/vintage-story-game-logo.png',
-    name: { zh: '远古遗迹', en: 'Ancient Ruins' },
-    author: 'Lumen Team',
-    authorType: 'organization',
-    authorId: 'lumen-team',
-    description: {
-      zh: '在世界各处加入可探索的遗迹、谜题和适合多人游玩的奖励。',
-      en: 'Introduces explorable ruins, puzzles, and rewards built for multiplayer worlds.'
-    },
-    tags: [
-      { zh: '冒险', en: 'Adventure' },
-      { zh: '探索', en: 'Exploration' }
-    ],
-    downloads: '76.2K',
-    followers: '1.4K',
-    updated: { zh: '3 天前', en: '3 days ago' }
-  },
-  {
-    id: 'natural-soundscapes',
-    image: '/brand/vintage-story-game-logo.png',
-    name: { zh: '自然音景', en: 'Natural Soundscapes' },
-    author: 'Northwind',
-    authorType: 'user',
-    authorId: 'northwind',
-    description: {
-      zh: '重新设计环境声音，让不同群系和天气拥有更清晰的氛围层次。',
-      en: 'Reworks environmental audio with clearer layers for biomes and weather.'
-    },
-    tags: [
-      { zh: '音频', en: 'Audio' },
-      { zh: '纯客户端', en: 'Client only' }
-    ],
-    downloads: '51.8K',
-    followers: '1.1K',
-    updated: { zh: '5 天前', en: '5 days ago' }
-  }
-];
+const sampleMods: SampleMod[] = [];
 
 function getActiveType(pathname: string, queryType: string | null): ContentType {
   if (pathname === '/modpacks') return 'modpacks';
@@ -367,7 +290,7 @@ export function ContentBrowser() {
             </div>
 
             <div className={`content-cards content-cards--${viewMode}`}>
-              {sampleMods.map((mod) => {
+              {sampleMods.length > 0 ? sampleMods.map((mod) => {
                 const name = language === 'en' ? mod.name.en : mod.name.zh;
                 const description = language === 'en' ? mod.description.en : mod.description.zh;
                 const updated = language === 'en' ? mod.updated.en : mod.updated.zh;
@@ -440,7 +363,7 @@ export function ContentBrowser() {
                     </dl>
                   </article>
                 );
-              })}
+              }) : <p className="content-browser__empty">{text.emptyDescription}</p>}
             </div>
           </section>
         </div>

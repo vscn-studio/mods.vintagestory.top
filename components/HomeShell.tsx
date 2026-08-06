@@ -487,10 +487,15 @@ export function HomeShell({
                   aria-hidden={!isAccountOpen}
                   aria-label={text.accountMenu}
                 >
-                  <button className="account-menu__item" type="button" role="menuitem">
+                  <a
+                    className="account-menu__item"
+                    href={`/user/${encodeURIComponent(sessionAccount.username)}`}
+                    role="menuitem"
+                    onClick={() => setIsAccountOpen(false)}
+                  >
                     <House size={16} strokeWidth={1.8} aria-hidden="true" />
                     <span>{text.personalHome}</span>
-                  </button>
+                  </a>
                   <button className="account-menu__item" type="button" role="menuitem">
                     <Settings size={16} strokeWidth={1.8} aria-hidden="true" />
                     <span>{text.settings}</span>
@@ -689,6 +694,7 @@ export function HomeShell({
       {isCreateProjectOpen ? (
         <CreateProjectModal
           username={sessionAccount?.username ?? sessionAccount?.displayName ?? ''}
+          avatarUrl={sessionAccount?.avatarUrl}
           organizations={sessionAccount?.organizations ?? []}
           onClose={() => setIsCreateProjectOpen(false)}
         />

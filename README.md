@@ -36,17 +36,17 @@ npm run dev
 
 开发服务器默认地址为 `http://localhost:3100`。
 
-需要在本地跳过登录认证时，可创建 `.env.development.local`：
+开发环境预览页面需要直接使用本地管理员时，可在 `.env.development.local` 中设置：
 
 ```dotenv
+NODE_ENV=development
 MOD_AUTH_DEV_ACCOUNT_ENABLED=true
-MOD_AUTH_DEV_ACCOUNT_NAME=本地开发账号
-MOD_AUTH_DEV_ACCOUNT_USERNAME=local-dev
-MOD_AUTH_DEV_ACCOUNT_EMAIL=dev@localhost.test
-MOD_AUTH_DEV_ACCOUNT_ADMIN=true
+MOD_AUTH_DEV_ACCOUNT_NAME=本地管理员
+MOD_AUTH_DEV_ACCOUNT_USERNAME=local-admin
+MOD_AUTH_DEV_ACCOUNT_EMAIL=local-admin@localhost.test
 ```
 
-该账号只会在 `npm run dev` 的开发环境中生效，页面和受保护 API 都会将其视为当前登录账号；生产构建会始终忽略这些变量。
+该账号仅在开发环境生效，不会读取或写入 `data/accounts.json`；生产环境始终使用真实登录会话。
 
 可用命令：
 

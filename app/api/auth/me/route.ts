@@ -24,7 +24,8 @@ export async function GET(request: NextRequest) {
       playerName: identity.playerName,
       avatarUrl: getAccountAvatarUrl(account),
       isAdmin: isCommunityAdmin(account),
-      organizations: normalizeOrganizationNames(account.organizations)
+      organizations: normalizeOrganizationNames(account.organizations),
+      ownedOrganizations: normalizeOrganizationNames(account.ownedOrganizations)
     }
   });
 }

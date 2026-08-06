@@ -1,13 +1,16 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, Download, FolderKanban, Grid2X2, Heart, List } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, FolderKanban, Grid2X2, Heart, List, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { ProfileEditModal, type ProfileEditValues, type ProfileMember } from '@/components/ProfileEditModal';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
+import type { SessionAccountSummary } from '@/lib/auth-server';
 
 type AccountPreviewPageProps = {
   kind: 'user' | 'organization';
   id: string;
+  sessionAccount?: SessionAccountSummary | null;
 };
 
 type ProjectType = 'mods' | 'theme-pack' | 'modpacks' | 'server';
@@ -20,54 +23,19 @@ type ProfileProject = {
   tags: Array<{ zh: string; en: string }>;
 };
 
-type ProfileOrganization = {
-  id: string;
-  name: string;
-  role: { zh: string; en: string };
-};
-
-const profileProjects: Record<string, ProfileProject[]> = {
-  mira: [
-    {
-      id: 'wildcraft',
-      type: 'mods',
-      name: { zh: '荒野工艺', en: 'Wildcraft' },
-      description: { zh: '扩展野外采集、制作与生存路线。', en: 'Expands gathering, crafting, and survival paths.' },
-      tags: [{ zh: '生存', en: 'Survival' }, { zh: '社区创作', en: 'Community' }]
-    }
-  ],
-  stoneworks: [
-    {
-      id: 'mechanical-expansion',
-      type: 'mods',
-      name: { zh: '机械扩展', en: 'Mechanical Expansion' },
-      description: { zh: '为风车、齿轮和自动化设备加入新的组合与升级选项。', en: 'Adds new combinations and upgrades for windmills, gears, and automation.' },
-      tags: [{ zh: '自动化', en: 'Automation' }, { zh: '双端', en: 'Client + server' }]
-    }
-  ],
-  'lumen-team': [
-    {
-      id: 'ancient-ruins',
-      type: 'mods',
-      name: { zh: '远古遗迹', en: 'Ancient Ruins' },
-      description: { zh: '在世界各处加入可探索的遗迹、谜题和奖励。', en: 'Introduces explorable ruins, puzzles, and rewards.' },
-      tags: [{ zh: '探索', en: 'Exploration' }, { zh: '多人', en: 'Multiplayer' }]
-    }
-  ]
-};
-
-const profileOrganizations: Record<string, ProfileOrganization> = {
-  mira: {
-    id: 'stoneworks',
-    name: 'Stoneworks',
-    role: { zh: '成员', en: 'Member' }
-  }
-};
+const memberRoleNames = {
+  owner: { zh: '所有者', en: 'Owner' },
+  admin: { zh: '管理员', en: 'Admin' },
+  maintainer: { zh: '维护者', en: 'Maintainer' },
+  member: { zh: '成员', en: 'Member' },
+  viewer: { zh: '只读成员', en: 'Viewer' }
+} as const;
 
 const copy = {
   'zh-CN': {
     projectsTitle: '公开项目',
     organization: '组织',
+    members: '组织成员',
     projectCount: '项目数量',
     downloads: '下载量',
     followers: '关注量',
@@ -83,11 +51,13 @@ const copy = {
     nextPage: '下一页',
     pagination: '分页',
     noProjects: '该分类暂无公开项目。',
-    placeholder: '相关内容接入后将在这里显示。'
+    placeholder: '相关内容接入后将在这里显示。',
+    edit: '编辑'
   },
   en: {
     projectsTitle: 'Public projects',
     organization: 'Organization',
+    members: 'Organization members',
     projectCount: 'Projects',
     downloads: 'Downloads',
     followers: 'Followers',
@@ -103,7 +73,8 @@ const copy = {
     nextPage: 'Next page',
     pagination: 'Pagination',
     noProjects: 'No public projects in this category yet.',
-    placeholder: 'Related content will appear here when connected.'
+    placeholder: 'Related content will appear here when connected.',
+    edit: 'Edit'
   }
 } as const;
 
@@ -115,32 +86,52 @@ function displayName(id: string): string {
     .join(' ');
 }
 
-export function AccountPreviewPage({ kind, id }: AccountPreviewPageProps) {
+function profileId(value: string): string {
+  return value.trim().toLocaleLowerCase().replace(/\s+/g, '-');
+}
+
+export function AccountPreviewPage({ kind, id, sessionAccount = null }: AccountPreviewPageProps) {
   const language = useSiteLanguage();
   const text = copy[language];
-  const name = displayName(id);
   const [projectType, setProjectType] = useState<ProjectType>('mods');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const name = displayName(id);
   const projectTabs: Array<{ id: ProjectType; label: string }> = [
     { id: 'mods', label: text.mods },
     { id: 'theme-pack', label: text.themePacks },
     { id: 'modpacks', label: text.modpacks },
     { id: 'server', label: text.serverTweaks }
   ];
-  const visibleProjects = (profileProjects[id] ?? []).filter((project) => project.type === projectType);
-  const projectCount = (profileProjects[id] ?? []).length;
-  const organization = kind === 'user' ? profileOrganizations[id] : undefined;
+  const visibleProjects: ProfileProject[] = [];
+  const projectCount = 0;
+  const canEditProfile = kind === 'user'
+    ? profileId(sessionAccount?.username ?? '') === profileId(id)
+    : Boolean(sessionAccount?.ownedOrganizations.some((organizationName) => profileId(organizationName) === profileId(id)));
+  const initialName = kind === 'user' && canEditProfile ? sessionAccount?.displayName ?? name : name;
+  const [profileName, setProfileName] = useState(initialName);
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState(kind === 'user' && canEditProfile ? sessionAccount?.avatarUrl : undefined);
+  const [profileDescription, setProfileDescription] = useState('');
+  const [organizationMembers, setOrganizationMembers] = useState<ProfileMember[]>([]);
+  const [editOpen, setEditOpen] = useState(false);
+
+  function saveProfile(values: ProfileEditValues) {
+    setProfileName(values.name);
+    setProfileAvatarUrl(values.avatarUrl);
+    setProfileDescription(values.description);
+    setOrganizationMembers(values.members);
+    setEditOpen(false);
+  }
 
   return (
     <section className="profile-page" aria-labelledby="profile-title">
       <div className="profile-page__inner">
         <header className="profile-hero">
           <div className="profile-avatar">
-            <img src="/brand/logo-icon-rounded.svg" alt="" />
+            <img src={profileAvatarUrl ?? '/brand/logo-icon-rounded.svg'} alt="" />
           </div>
           <div className="profile-hero__copy">
-            <h1 id="profile-title">{name}</h1>
-            <p>{text.placeholder}</p>
+            <h1 id="profile-title">{profileName}</h1>
+            <p>{profileDescription || text.placeholder}</p>
             <dl className="profile-project-stats">
               <div>
                 <dt aria-label={text.projectCount}><FolderKanban size={16} strokeWidth={1.9} aria-hidden="true" /></dt>
@@ -156,9 +147,15 @@ export function AccountPreviewPage({ kind, id }: AccountPreviewPageProps) {
               </div>
             </dl>
           </div>
+          {canEditProfile ? (
+            <button className="preview-action profile-hero__edit-button" type="button" onClick={() => setEditOpen(true)}>
+              <Pencil size={17} strokeWidth={1.9} aria-hidden="true" />
+              <span>{text.edit}</span>
+            </button>
+          ) : null}
         </header>
 
-        <div className={organization ? 'profile-content-layout profile-content-layout--with-sidebar' : 'profile-content-layout'}>
+        <div className={kind === 'organization' ? 'profile-content-layout profile-content-layout--with-sidebar' : 'profile-content-layout'}>
           <div className="profile-projects">
           <div className="content-toolbar profile-project-toolbar">
             <nav className="content-switcher" aria-label={text.contentNavigation}>
@@ -226,7 +223,7 @@ export function AccountPreviewPage({ kind, id }: AccountPreviewPageProps) {
                         <div className="content-card__copy">
                           <h2 className="content-card__title">
                             <span>{projectName}</span>{' '}
-                            <span className="content-card__author">by {name}</span>
+                            <span className="content-card__author">by {profileName}</span>
                           </h2>
                           <p className="content-card__description">{projectDescription}</p>
                         </div>
@@ -241,23 +238,44 @@ export function AccountPreviewPage({ kind, id }: AccountPreviewPageProps) {
             </div>
           </div>
 
-          {organization ? (
-            <aside className="profile-organization-card">
+          {kind === 'organization' ? (
+            <aside className="profile-organization-card profile-members-card">
               <div className="preview-owner-card__heading">
-                <h2>{text.organization}</h2>
+                <h2>{text.members}</h2>
               </div>
-              <Link className="preview-owner-card__identity" href={`/organization/${organization.id}`}>
-                <span className="preview-owner-card__avatar">
-                  <img src="/brand/logo-icon-rounded.svg" alt="" />
-                </span>
-                <span className="preview-owner-card__name">
-                  <strong>{organization.name}</strong>
-                  <span>{language === 'en' ? organization.role.en : organization.role.zh}</span>
-                </span>
-              </Link>
+              <div className="preview-owner-card__members">
+                {organizationMembers.length > 0 ? (
+                  <div className="preview-owner-card__member-list">
+                    {organizationMembers.map((member) => (
+                      <Link className="preview-owner-card__member" href={`/user/${member.id}`} key={member.id}>
+                        <span className="preview-owner-card__member-avatar">
+                          {member.avatarUrl ? <img src={member.avatarUrl} alt="" /> : <img src="/brand/logo-icon-rounded.svg" alt="" />}
+                        </span>
+                        <span className="preview-owner-card__member-name">
+                          <strong>{member.name}</strong>
+                          <span>{language === 'en' ? memberRoleNames[member.role].en : memberRoleNames[member.role].zh}</span>
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                ) : <p>{text.placeholder}</p>}
+              </div>
             </aside>
           ) : null}
         </div>
+        {editOpen ? (
+          <ProfileEditModal
+            kind={kind}
+            initialName={profileName}
+            initialAvatarUrl={profileAvatarUrl}
+            initialDescription={profileDescription}
+            initialMembers={organizationMembers}
+            canManageMembers={kind === 'organization' && canEditProfile}
+            english={language === 'en'}
+            onClose={() => setEditOpen(false)}
+            onSave={saveProfile}
+          />
+        ) : null}
       </div>
     </section>
   );

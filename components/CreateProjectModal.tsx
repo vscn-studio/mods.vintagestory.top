@@ -1,18 +1,12 @@
 'use client';
 
 import {
-  Boxes,
   CheckCircle2,
   ChevronDown,
-  Globe2,
   Link2,
-  LockKeyhole,
   Package,
-  Palette,
   Plus,
-  ServerCog,
-  X,
-  type LucideIcon
+  X
 } from 'lucide-react';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
@@ -23,6 +17,7 @@ type Visibility = 'public' | 'private';
 
 type CreateProjectModalProps = {
   username: string;
+  avatarUrl?: string;
   organizations: string[];
   onClose: () => void;
 };
@@ -35,14 +30,19 @@ type LocalizedCopy = {
 type ProjectTypeOption = {
   value: ProjectType;
   label: LocalizedCopy;
-  icon: LucideIcon;
+};
+
+type OwnerOption = {
+  value: ProjectOwner;
+  label: string;
+  avatarUrl?: string;
 };
 
 const projectTypes: ProjectTypeOption[] = [
-  { value: 'mod', label: { zh: '模组', en: 'Mod' }, icon: Package },
-  { value: 'modpack', label: { zh: '整合包', en: 'Modpack' }, icon: Boxes },
-  { value: 'theme-pack', label: { zh: '主题包', en: 'Theme pack' }, icon: Palette },
-  { value: 'server', label: { zh: '服务器调整', en: 'Server tweak' }, icon: ServerCog }
+  { value: 'mod', label: { zh: '模组', en: 'Mod' } },
+  { value: 'modpack', label: { zh: '整合包', en: 'Modpack' } },
+  { value: 'theme-pack', label: { zh: '主题包', en: 'Theme pack' } },
+  { value: 'server', label: { zh: '服务器调整', en: 'Server tweak' } }
 ];
 
 const copy = {
@@ -56,9 +56,7 @@ const copy = {
     owner: '所有者',
     visibility: '可见性',
     public: '公开',
-    publicHint: '所有人都可以查看项目',
     private: '私有',
-    privateHint: '仅项目成员可以查看项目',
     overview: '概述',
     overviewPlaceholder: '用一两句话介绍这个项目。',
     cancel: '取消',
@@ -78,9 +76,7 @@ const copy = {
     owner: 'Owner',
     visibility: 'Visibility',
     public: 'Public',
-    publicHint: 'Everyone can view this project',
     private: 'Private',
-    privateHint: 'Only project members can view this project',
     overview: 'Overview',
     overviewPlaceholder: 'Describe this project in one or two sentences.',
     cancel: 'Cancel',
@@ -92,7 +88,7 @@ const copy = {
   }
 } as const;
 
-export function CreateProjectModal({ username, organizations, onClose }: CreateProjectModalProps) {
+export function CreateProjectModal({ username, avatarUrl, organizations, onClose }: CreateProjectModalProps) {
   const language = useSiteLanguage();
   const text = copy[language];
   const [projectType, setProjectType] = useState<ProjectType>('mod');
@@ -106,8 +102,8 @@ export function CreateProjectModal({ username, organizations, onClose }: CreateP
   const [isOwnerOpen, setIsOwnerOpen] = useState(false);
   const ownerMenuRef = useRef<HTMLDivElement>(null);
   const organizationNames = [...new Set(organizations.map((organization) => organization.trim()).filter(Boolean))];
-  const ownerOptions: Array<{ value: ProjectOwner; label: string }> = [
-    { value: 'personal', label: username },
+  const ownerOptions: OwnerOption[] = [
+    { value: 'personal', label: username, avatarUrl },
     ...organizationNames.map((organization) => ({
       value: `organization:${organization}` as ProjectOwner,
       label: organization
@@ -175,24 +171,19 @@ export function CreateProjectModal({ username, organizations, onClose }: CreateP
             <form className="auth-form create-project-form" onSubmit={createProject}>
               <fieldset className="create-project-fieldset">
                 <legend className="auth-field__label">{text.projectType}</legend>
-                <div className="create-project-type-options">
-                  {projectTypes.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <label className={projectType === item.value ? 'create-project-type create-project-type--active' : 'create-project-type'} key={item.value}>
-                        <input
-                          type="radio"
-                          name="projectType"
-                          value={item.value}
-                          checked={projectType === item.value}
-                          onChange={() => setProjectType(item.value)}
-                        />
-                        <Icon size={17} strokeWidth={1.9} aria-hidden="true" />
-                        <span>{language === 'en' ? item.label.en : item.label.zh}</span>
-                      </label>
-                    );
-                  })}
-                </div>
+                <nav className="content-switcher" aria-label={text.projectType}>
+                  {projectTypes.map((item) => (
+                    <button
+                      className={projectType === item.value ? 'content-switcher__item content-switcher__item--active' : 'content-switcher__item'}
+                      key={item.value}
+                      type="button"
+                      aria-pressed={projectType === item.value}
+                      onClick={() => setProjectType(item.value)}
+                    >
+                      {language === 'en' ? item.label.en : item.label.zh}
+                    </button>
+                  ))}
+                </nav>
               </fieldset>
 
               <label className="auth-field">
@@ -222,7 +213,7 @@ export function CreateProjectModal({ username, organizations, onClose }: CreateP
                     aria-expanded={isOwnerOpen}
                     onClick={() => setIsOwnerOpen((open) => !open)}
                   >
-                    <span className="content-select__value">{selectedOwner.label}</span>
+                    <span className="content-select__value"><OwnerIdentity option={selectedOwner} /></span>
                     <ChevronDown className={isOwnerOpen ? 'content-select__chevron content-select__chevron--up' : 'content-select__chevron'} size={15} strokeWidth={1.8} aria-hidden="true" />
                   </button>
                   <div
@@ -233,7 +224,7 @@ export function CreateProjectModal({ username, organizations, onClose }: CreateP
                   >
                     {ownerOptions.map((option) => (
                       <button
-                        className={option.value === owner ? 'content-select-option content-select-option--active' : 'content-select-option'}
+                        className="content-select-option create-project-owner-option"
                         key={option.value}
                         type="button"
                         role="option"
@@ -244,7 +235,7 @@ export function CreateProjectModal({ username, organizations, onClose }: CreateP
                           setIsOwnerOpen(false);
                         }}
                       >
-                        {option.label}
+                        <OwnerIdentity option={option} />
                       </button>
                     ))}
                   </div>
@@ -253,18 +244,24 @@ export function CreateProjectModal({ username, organizations, onClose }: CreateP
 
               <fieldset className="create-project-fieldset">
                 <legend className="auth-field__label">{text.visibility}</legend>
-                <div className="create-project-visibility-options">
-                  <label className={visibility === 'public' ? 'create-project-visibility create-project-visibility--active' : 'create-project-visibility'}>
-                    <input type="radio" name="visibility" value="public" checked={visibility === 'public'} onChange={() => setVisibility('public')} />
-                    <Globe2 size={17} strokeWidth={1.8} aria-hidden="true" />
-                    <span>{text.public}<small>{text.publicHint}</small></span>
-                  </label>
-                  <label className={visibility === 'private' ? 'create-project-visibility create-project-visibility--active' : 'create-project-visibility'}>
-                    <input type="radio" name="visibility" value="private" checked={visibility === 'private'} onChange={() => setVisibility('private')} />
-                    <LockKeyhole size={17} strokeWidth={1.8} aria-hidden="true" />
-                    <span>{text.private}<small>{text.privateHint}</small></span>
-                  </label>
-                </div>
+                <nav className="content-switcher" aria-label={text.visibility}>
+                  <button
+                    className={visibility === 'public' ? 'content-switcher__item content-switcher__item--active' : 'content-switcher__item'}
+                    type="button"
+                    aria-pressed={visibility === 'public'}
+                    onClick={() => setVisibility('public')}
+                  >
+                    {text.public}
+                  </button>
+                  <button
+                    className={visibility === 'private' ? 'content-switcher__item content-switcher__item--active' : 'content-switcher__item'}
+                    type="button"
+                    aria-pressed={visibility === 'private'}
+                    onClick={() => setVisibility('private')}
+                  >
+                    {text.private}
+                  </button>
+                </nav>
               </fieldset>
 
               <label className="auth-field">
@@ -289,4 +286,15 @@ export function CreateProjectModal({ username, organizations, onClose }: CreateP
 
 function PlusIcon() {
   return <Plus size={17} strokeWidth={1.9} aria-hidden="true" />;
+}
+
+function OwnerIdentity({ option }: { option: OwnerOption }) {
+  return (
+    <span className="create-project-owner-identity">
+      <span className="account-avatar" aria-hidden="true">
+        {option.avatarUrl ? <img src={option.avatarUrl} alt="" /> : <span className="account-avatar__initial">{option.label.trim().slice(0, 1).toUpperCase() || '?'}</span>}
+      </span>
+      <span>{option.label}</span>
+    </span>
+  );
 }

@@ -26,6 +26,7 @@ export type ModAccount = PendingIdentity & {
   lastLoginAt: string;
   linkedIdentities?: PendingIdentity[];
   organizations?: string[];
+  ownedOrganizations?: string[];
 };
 
 export type SessionAccountSummary = {
@@ -35,6 +36,7 @@ export type SessionAccountSummary = {
   avatarUrl?: string;
   isAdmin?: boolean;
   organizations: string[];
+  ownedOrganizations: string[];
 };
 
 export type IdentityAuthenticationResult =
@@ -415,22 +417,23 @@ function getDevelopmentAccount(): ModAccount | null {
     return null;
   }
 
-  const displayName = (process.env.MOD_AUTH_DEV_ACCOUNT_NAME ?? '本地开发账号').trim() || '本地开发账号';
-  const username = (process.env.MOD_AUTH_DEV_ACCOUNT_USERNAME ?? 'local-dev').trim() || 'local-dev';
-  const bindEmail = (process.env.MOD_AUTH_DEV_ACCOUNT_EMAIL ?? 'dev@localhost.test').trim() || 'dev@localhost.test';
+  const displayName = (process.env.MOD_AUTH_DEV_ACCOUNT_NAME ?? '本地管理员').trim() || '本地管理员';
+  const username = (process.env.MOD_AUTH_DEV_ACCOUNT_USERNAME ?? 'local-admin').trim() || 'local-admin';
+  const bindEmail = (process.env.MOD_AUTH_DEV_ACCOUNT_EMAIL ?? 'local-admin@localhost.test').trim() || 'local-admin@localhost.test';
   const adminGroup = (process.env.COMMUNITY_ADMIN_GROUP ?? '管理员').trim();
-  const groups = environmentFlag(process.env.MOD_AUTH_DEV_ACCOUNT_ADMIN) && adminGroup ? [adminGroup] : [];
 
   return {
-    id: 'mod_local_development',
+    id: 'mod_local_development_admin',
     provider: 'community',
-    subject: `local-development:${username}`,
+    subject: `local-admin-development:${username}`,
     displayName,
     username,
     providerEmail: bindEmail,
     providerEmailVerified: true,
     bindEmail,
-    groups,
+    groups: adminGroup ? [adminGroup] : [],
+    organizations: ['stoneworks'],
+    ownedOrganizations: ['stoneworks'],
     createdAt: developmentAccountTimestamp,
     lastLoginAt: developmentAccountTimestamp
   };
@@ -450,7 +453,8 @@ export function getSessionAccountSummary(account: ModAccount): SessionAccountSum
     provider: identity.provider,
     avatarUrl: getAccountAvatarUrl(account),
     isAdmin: isCommunityAdmin(account),
-    organizations: normalizeOrganizationNames(account.organizations)
+    organizations: normalizeOrganizationNames(account.organizations),
+    ownedOrganizations: normalizeOrganizationNames(account.ownedOrganizations)
   };
 }
 

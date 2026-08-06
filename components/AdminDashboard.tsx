@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  Activity,
   ArchiveRestore,
   BadgeCheck,
   BellRing,
@@ -22,21 +21,16 @@ import {
   FolderOpen,
   Gamepad2,
   Gauge,
-  Globe2,
-  HardDrive,
   History,
   KeyRound,
-  LayoutDashboard,
   LogIn,
   Menu,
   MessageSquare,
   PackageSearch,
-  PanelsTopLeft,
   Plus,
   RefreshCcw,
   Save,
   Search,
-  Server,
   Shield,
   ShieldCheck,
   SlidersHorizontal,
@@ -50,11 +44,8 @@ import {
 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
-import { AdminTrafficChart } from '@/components/AdminTrafficChart';
 
 type AdminSection =
-  | 'dashboard'
-  | 'pages'
   | 'permissions'
   | 'api'
   | 'storage'
@@ -68,8 +59,6 @@ type AdminSection =
 type LocalizedText = { zh: string; en: string };
 
 const navigation: Array<{ id: AdminSection; label: LocalizedText; icon: LucideIcon }> = [
-  { id: 'dashboard', label: { zh: '仪表盘', en: 'Dashboard' }, icon: LayoutDashboard },
-  { id: 'pages', label: { zh: '页面设置', en: 'Page settings' }, icon: PanelsTopLeft },
   { id: 'permissions', label: { zh: '权限管理', en: 'Permissions' }, icon: ShieldCheck },
   { id: 'api', label: { zh: 'API 管理', en: 'API management' }, icon: Braces },
   { id: 'storage', label: { zh: '存储设置', en: 'Storage settings' }, icon: Database },
@@ -161,77 +150,44 @@ function MoreButton({ label }: { label: string }) {
   );
 }
 
-function DashboardView({ english }: { english: boolean }) {
-  const labels = english
-    ? { visits: 'Site visits', downloads: 'Downloads', storage: 'Storage used', api: 'API calls', system: 'System status', today: 'Today', month: 'This month', uptime: 'Uptime', requests: 'Requests', health: 'All services operational', traffic: 'Traffic in the last 7 days', service: 'Service status', web: 'Web application', database: 'Database', object: 'Object storage', queue: 'Background tasks' }
-    : { visits: '网站访问统计', downloads: '下载统计', storage: '存储占用', api: 'API 调用状态', system: '系统状态', today: '今日', month: '本月', uptime: '可用率', requests: '请求数', health: '所有服务运行正常', traffic: '最近 7 天访问趋势', service: '服务状态', web: '网站应用', database: '数据库', object: '对象存储', queue: '后台任务' };
-  const metrics = [
-    { label: labels.visits, value: '18,642', meta: `${labels.today} +12.8%`, icon: Globe2 },
-    { label: labels.downloads, value: '6,284', meta: `${labels.month} 142K`, icon: Download },
-    { label: labels.storage, value: '384 GB', meta: '38.4% / 1 TB', icon: HardDrive },
-    { label: labels.api, value: '99.98%', meta: `${labels.requests} 82.6K`, icon: Activity },
-    { label: labels.system, value: labels.health, meta: `${labels.uptime} 99.99%`, icon: Server }
-  ];
-  return (
-    <>
-      <div className="admin-metrics">
-        {metrics.map(({ label, value, meta, icon: Icon }) => (
-          <article className="admin-metric" key={label}>
-            <span className="admin-metric__icon"><Icon size={20} strokeWidth={2} aria-hidden="true" /></span>
-            <div><span>{label}</span><strong>{value}</strong><small>{meta}</small></div>
-          </article>
-        ))}
-      </div>
-      <div className="admin-grid admin-grid--dashboard">
-        <AdminPanel title={labels.traffic} className="admin-panel--wide">
-          <AdminTrafficChart english={english} />
-        </AdminPanel>
-        <AdminPanel title={labels.service}>
-          <ul className="admin-status-list">
-            {[labels.web, labels.database, labels.object, labels.queue].map((item) => (
-              <li key={item}><span><CheckCircle2 size={17} strokeWidth={2} aria-hidden="true" />{item}</span><StatusPill>{english ? 'Healthy' : '正常'}</StatusPill></li>
-            ))}
-          </ul>
-        </AdminPanel>
-      </div>
-    </>
-  );
-}
+type PermissionEntry = {
+  id: string;
+  category: { zh: string; en: string };
+  name: { zh: string; en: string };
+  roles: { zh: string; en: string };
+  enabled: boolean;
+};
 
-function PagesView({ english, common }: { english: boolean; common: typeof copy.zh | typeof copy.en }) {
-  return (
-    <div className="admin-grid admin-grid--two">
-      <AdminPanel title={english ? 'Site information' : '网站基础信息'} action={<QuietButton icon={Save} primary>{common.save}</QuietButton>}>
-        <div className="admin-form-grid">
-          <label className="admin-logo-field"><span>{english ? 'Logo' : '网站 Logo'}</span><span className="admin-logo-preview"><img src="/brand/logo-icon-rounded.svg" alt="" /><button type="button">{english ? 'Replace' : '替换'}</button></span></label>
-          <label className="admin-field"><span>{english ? 'Site name' : '网站名称'}</span><input defaultValue="VSCN Mod DB" /></label>
-          <label className="admin-field admin-field--full"><span>{english ? 'SEO title' : 'SEO 标题'}</span><input defaultValue={english ? 'Vintage Story Community Mod Database' : '复古物语中文社区模组数据库'} /></label>
-          <label className="admin-field admin-field--full"><span>{english ? 'Description' : '网站描述'}</span><textarea rows={4} defaultValue={english ? 'Discover and share Vintage Story community creations.' : '探索并分享复古物语社区创作。'} /></label>
-        </div>
-      </AdminPanel>
-      <AdminPanel title={english ? 'Page maintenance' : '页面维护设置'} action={<QuietButton icon={Save}>{common.save}</QuietButton>}>
-        <div className="admin-setting-list">
-          {[
-            [english ? 'Mod browsing' : '模组浏览页', false],
-            [english ? 'Project submissions' : '项目提交页', true],
-            [english ? 'Comments' : '评论功能', false],
-            [english ? 'MVL downloads' : 'MVL 下载页', false]
-          ].map(([label, checked]) => <Toggle key={String(label)} label={String(label)} defaultChecked={Boolean(checked)} />)}
-        </div>
-        <label className="admin-field admin-field--spaced"><span>{english ? 'Maintenance message' : '维护状态提示'}</span><textarea rows={4} defaultValue={english ? 'This page is temporarily unavailable during maintenance.' : '当前页面正在维护，请稍后再试。'} /></label>
-      </AdminPanel>
-    </div>
-  );
-}
+const permissionEntries: PermissionEntry[] = [
+  { id: 'project.create', category: { zh: '项目', en: 'Projects' }, name: { zh: '创建项目', en: 'Create projects' }, roles: { zh: '已验证用户', en: 'Verified users' }, enabled: true },
+  { id: 'project.update', category: { zh: '项目', en: 'Projects' }, name: { zh: '编辑项目资料', en: 'Edit project details' }, roles: { zh: '项目 Owner、Maintainer', en: 'Project Owner, Maintainer' }, enabled: true },
+  { id: 'project.member.manage', category: { zh: '项目', en: 'Projects' }, name: { zh: '管理项目成员', en: 'Manage project members' }, roles: { zh: '项目 Owner、Maintainer', en: 'Project Owner, Maintainer' }, enabled: true },
+  { id: 'project.transfer', category: { zh: '项目', en: 'Projects' }, name: { zh: '转让项目', en: 'Transfer projects' }, roles: { zh: '项目 Owner', en: 'Project Owner' }, enabled: true },
+  { id: 'project.archive', category: { zh: '项目', en: 'Projects' }, name: { zh: '归档或删除项目', en: 'Archive or delete projects' }, roles: { zh: '项目 Owner', en: 'Project Owner' }, enabled: true },
+  { id: 'release.create', category: { zh: '版本与文件', en: 'Releases & files' }, name: { zh: '创建项目版本', en: 'Create releases' }, roles: { zh: '项目 Owner、Maintainer、Contributor', en: 'Project Owner, Maintainer, Contributor' }, enabled: true },
+  { id: 'release.publish', category: { zh: '版本与文件', en: 'Releases & files' }, name: { zh: '发布或撤回版本', en: 'Publish or withdraw releases' }, roles: { zh: '项目 Owner、Maintainer', en: 'Project Owner, Maintainer' }, enabled: true },
+  { id: 'release.file.manage', category: { zh: '版本与文件', en: 'Releases & files' }, name: { zh: '上传和管理文件', en: 'Upload and manage files' }, roles: { zh: '项目 Owner、Maintainer、Contributor', en: 'Project Owner, Maintainer, Contributor' }, enabled: true },
+  { id: 'download.public', category: { zh: '版本与文件', en: 'Releases & files' }, name: { zh: '下载公开文件', en: 'Download public files' }, roles: { zh: '所有访客', en: 'All visitors' }, enabled: true },
+  { id: 'comment.create', category: { zh: '社区', en: 'Community' }, name: { zh: '发表评论', en: 'Publish comments' }, roles: { zh: '已验证用户', en: 'Verified users' }, enabled: true },
+  { id: 'comment.moderate', category: { zh: '社区', en: 'Community' }, name: { zh: '管理评论和举报', en: 'Moderate comments and reports' }, roles: { zh: '版主、站点管理员', en: 'Moderators, Site administrators' }, enabled: true },
+  { id: 'organization.create', category: { zh: '组织', en: 'Organizations' }, name: { zh: '创建组织', en: 'Create organizations' }, roles: { zh: '可信用户', en: 'Trusted users' }, enabled: true },
+  { id: 'organization.manage', category: { zh: '组织', en: 'Organizations' }, name: { zh: '管理组织成员和设置', en: 'Manage organization members and settings' }, roles: { zh: '组织 Owner、Admin', en: 'Organization Owner, Admin' }, enabled: true },
+  { id: 'organization.project.manage', category: { zh: '组织', en: 'Organizations' }, name: { zh: '管理组织项目', en: 'Manage organization projects' }, roles: { zh: '组织 Owner、Admin、Maintainer', en: 'Organization Owner, Admin, Maintainer' }, enabled: true },
+  { id: 'github.connect', category: { zh: 'GitHub 集成', en: 'GitHub integration' }, name: { zh: '连接 GitHub 账号', en: 'Connect GitHub accounts' }, roles: { zh: '本人', en: 'Account owner' }, enabled: true },
+  { id: 'github.import', category: { zh: 'GitHub 集成', en: 'GitHub integration' }, name: { zh: '导入 GitHub 仓库', en: 'Import GitHub repositories' }, roles: { zh: '项目 Owner、Maintainer', en: 'Project Owner, Maintainer' }, enabled: true },
+  { id: 'github.sync', category: { zh: 'GitHub 集成', en: 'GitHub integration' }, name: { zh: '同步 README、标签和 Release', en: 'Sync README, tags, and releases' }, roles: { zh: '项目 Owner、Maintainer', en: 'Project Owner, Maintainer' }, enabled: true },
+  { id: 'github.publish', category: { zh: 'GitHub 集成', en: 'GitHub integration' }, name: { zh: '从 GitHub 发布版本', en: 'Publish releases from GitHub' }, roles: { zh: '项目 Owner、Maintainer', en: 'Project Owner, Maintainer' }, enabled: true },
+  { id: 'review.content', category: { zh: '审核', en: 'Review' }, name: { zh: '审核项目、版本和文件', en: 'Review projects, releases, and files' }, roles: { zh: '审核员、站点管理员', en: 'Reviewers, Site administrators' }, enabled: true },
+  { id: 'user.manage', category: { zh: '站点管理', en: 'Site administration' }, name: { zh: '管理用户和封禁', en: 'Manage users and bans' }, roles: { zh: '站点管理员', en: 'Site administrators' }, enabled: true },
+  { id: 'api.key.manage', category: { zh: '站点管理', en: 'Site administration' }, name: { zh: '管理 API 密钥', en: 'Manage API keys' }, roles: { zh: '站点管理员', en: 'Site administrators' }, enabled: true },
+  { id: 'audit.view', category: { zh: '站点管理', en: 'Site administration' }, name: { zh: '查看审计日志', en: 'View audit logs' }, roles: { zh: '站点管理员、审核员', en: 'Site administrators, Reviewers' }, enabled: true }
+];
 
 function PermissionsView({ english, common }: { english: boolean; common: typeof copy.zh | typeof copy.en }) {
-  const rows = english
-    ? [['Submit projects', 'Registered users', true], ['Upload releases', 'Project members', true], ['Publish comments', 'Verified users', true], ['Create organizations', 'Trusted users', false], ['Use public API', 'Approved applications', true]]
-    : [['提交项目', '注册用户', true], ['上传版本', '项目成员', true], ['发布评论', '已验证用户', true], ['创建组织', '可信用户', false], ['使用公共 API', '已审核应用', true]];
   return (
     <AdminPanel title={english ? 'Website permissions' : '网站权限列表'} action={<QuietButton icon={Plus}>{english ? 'Add policy' : '添加权限规则'}</QuietButton>}>
-      <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>{english ? 'Permission' : '权限'}</th><th>{english ? 'Allowed users' : '可用用户'}</th><th>{english ? 'Status' : '状态'}</th><th>{english ? 'Availability' : '开放使用'}</th><th><span className="sr-only">{common.more}</span></th></tr></thead><tbody>
-        {rows.map(([permission, users, enabled]) => <tr key={String(permission)}><td><strong>{String(permission)}</strong></td><td>{String(users)}</td><td><StatusPill tone={enabled ? 'success' : 'warning'}>{enabled ? common.enabled : common.disabled}</StatusPill></td><td><Toggle label={enabled ? common.enabled : common.disabled} defaultChecked={Boolean(enabled)} /></td><td><MoreButton label={common.more} /></td></tr>)}
+      <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>{english ? 'Category' : '类别'}</th><th>{english ? 'Permission' : '权限'}</th><th>{english ? 'Allowed roles' : '允许角色'}</th><th>{english ? 'Status' : '状态'}</th><th>{english ? 'Availability' : '开放使用'}</th><th><span className="sr-only">{common.more}</span></th></tr></thead><tbody>
+        {permissionEntries.map((entry) => <tr key={entry.id}><td><span className="admin-table__muted">{english ? entry.category.en : entry.category.zh}</span></td><td><strong>{english ? entry.name.en : entry.name.zh}</strong><small className="admin-table__code">{entry.id}</small></td><td>{english ? entry.roles.en : entry.roles.zh}</td><td><StatusPill tone={entry.enabled ? 'success' : 'warning'}>{entry.enabled ? common.enabled : common.disabled}</StatusPill></td><td><Toggle label={entry.enabled ? common.enabled : common.disabled} defaultChecked={entry.enabled} /></td><td><MoreButton label={common.more} /></td></tr>)}
       </tbody></table></div>
     </AdminPanel>
   );
@@ -281,7 +237,7 @@ function FilesView({ english, common }: { english: boolean; common: typeof copy.
       <div className="admin-subnav">{tabs.map(([label, Icon], index) => <button className={index === 0 ? 'admin-subnav__item admin-subnav__item--active' : 'admin-subnav__item'} type="button" key={label}><Icon size={17} strokeWidth={2} />{label}</button>)}</div>
       <div className="admin-table-tools"><label><Search size={17} strokeWidth={2} /><input placeholder={english ? 'Search by file name or project' : '按文件名或项目搜索'} /></label><QuietButton icon={SlidersHorizontal}>{english ? 'File type' : '文件类型'}</QuietButton></div>
       <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>{english ? 'File' : '文件'}</th><th>{english ? 'Project' : '所属项目'}</th><th>{english ? 'Type' : '类型'}</th><th>{english ? 'Size' : '大小'}</th><th>{english ? 'Uploaded' : '上传时间'}</th><th><span className="sr-only">{common.more}</span></th></tr></thead><tbody>
-        {[['mechanical-expansion-1.0.1.zip', english ? 'Mechanical Expansion' : '机械扩展', 'ZIP', '42.8 MB', '2026-08-06 13:42'], ['wildcraft-2.4.0.zip', english ? 'Wildcraft' : '荒野工艺', 'ZIP', '18.2 MB', '2026-08-05 22:16'], ['cover-forest.webp', english ? 'Wildcraft' : '荒野工艺', 'WEBP', '842 KB', '2026-08-05 21:58']].map((row) => <tr key={row[0]}>{row.map((cell, index) => <td key={cell}>{index === 0 ? <strong>{cell}</strong> : cell}</td>)}<td><MoreButton label={common.more} /></td></tr>)}
+        <tr><td colSpan={6} className="admin-table__empty">{common.noData}</td></tr>
       </tbody></table></div>
     </AdminPanel>
   );
@@ -312,7 +268,7 @@ function ContentView({ english, common }: { english: boolean; common: typeof cop
       <div className="admin-module-grid">{modules.map(([label, count, Icon]) => <button className="admin-module" type="button" key={label}><span><Icon size={20} strokeWidth={2} /></span><strong>{label}</strong><small>{count}</small><ChevronRight size={17} /></button>)}</div>
       <AdminPanel title={english ? 'Recent projects' : '最近模组'} action={<div className="admin-actions"><QuietButton icon={SlidersHorizontal}>{english ? 'Manage categories' : '分类配置'}</QuietButton><QuietButton icon={Tags}>{english ? 'Merge tags' : '标签合并/迁移'}</QuietButton><QuietButton icon={Plus} primary>{english ? 'Add' : '添加内容'}</QuietButton></div>}>
         <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>{english ? 'Project' : '模组'}</th><th>{english ? 'Owner' : '所有者'}</th><th>{english ? 'Category' : '分类'}</th><th>{english ? 'Version' : '游戏版本'}</th><th>{english ? 'Status' : '状态'}</th><th><span className="sr-only">{common.more}</span></th></tr></thead><tbody>
-          {[[english ? 'Mechanical Expansion' : '机械扩展', 'Stoneworks', english ? 'Technology' : '科技', '1.21 / 1.22'], [english ? 'Wildcraft' : '荒野工艺', 'Mira', english ? 'Survival' : '生存', '1.22'], [english ? 'Quiet Nights' : '静谧之夜', 'Nox', english ? 'Theme pack' : '主题包', '1.21']].map((row) => <tr key={row[0]}>{row.map((cell, index) => <td key={cell}>{index === 0 ? <strong>{cell}</strong> : cell}</td>)}<td><StatusPill>{english ? 'Published' : '已发布'}</StatusPill></td><td><MoreButton label={common.more} /></td></tr>)}
+          <tr><td colSpan={6} className="admin-table__empty">{common.noData}</td></tr>
         </tbody></table></div>
       </AdminPanel>
     </>
@@ -326,8 +282,8 @@ function ReviewView({ english, common }: { english: boolean; common: typeof copy
         <div className="admin-scan"><span className="admin-scan__icon"><Shield size={30} strokeWidth={2} /></span><div><strong>{english ? 'Scanner is active' : '文件扫描服务运行中'}</strong><span>{english ? '1,842 files scanned in the last 24 hours' : '最近 24 小时已扫描 1,842 个文件'}</span></div><StatusPill>{common.normal}</StatusPill></div>
         <dl className="admin-review-stats"><div><dt>{english ? 'Pending' : '等待扫描'}</dt><dd>3</dd></div><div><dt>{english ? 'Suspicious' : '可疑文件'}</dt><dd>1</dd></div><div><dt>{english ? 'Blocked' : '已拦截'}</dt><dd>12</dd></div></dl>
       </AdminPanel>
-      <AdminPanel title={english ? 'Review queue' : '待审核内容'}><ul className="admin-review-list"><li><span><FileArchive size={18} /><span><strong>mechanical-tools-1.2.zip</strong><small>{english ? 'Static analysis needs confirmation' : '静态分析结果需要确认'}</small></span></span><StatusPill tone="warning">{english ? 'Review' : '待审核'}</StatusPill></li><li><span><MessageSquare size={18} /><span><strong>{english ? 'Reported comment' : '被举报的评论'}</strong><small>{english ? 'Reported by 3 users' : '3 位用户举报'}</small></span></span><StatusPill tone="neutral">{english ? 'Queued' : '队列中'}</StatusPill></li></ul></AdminPanel>
-      <AdminPanel title={english ? 'Review history' : '审核历史'} className="admin-panel--full"><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>{english ? 'Time' : '时间'}</th><th>{english ? 'Item' : '审核对象'}</th><th>{english ? 'Result' : '结果'}</th><th>{english ? 'Reviewer' : '审核人'}</th></tr></thead><tbody><tr><td>2026-08-06 12:42</td><td>wildcraft-2.4.0.zip</td><td><StatusPill>{english ? 'Approved' : '通过'}</StatusPill></td><td>Aria</td></tr><tr><td>2026-08-06 10:18</td><td>unknown-patch.zip</td><td><StatusPill tone="danger">{english ? 'Rejected' : '拒绝'}</StatusPill></td><td>Mira</td></tr></tbody></table></div></AdminPanel>
+      <AdminPanel title={english ? 'Review queue' : '待审核内容'}><ul className="admin-review-list"><li><span><MessageSquare size={18} /><span><strong>{english ? 'Reported comment' : '被举报的评论'}</strong><small>{english ? '3 reports need review' : '3 位用户举报，等待处理'}</small></span></span><StatusPill tone="neutral">{english ? 'Queued' : '队列中'}</StatusPill></li></ul></AdminPanel>
+      <AdminPanel title={english ? 'Review history' : '审核历史'} className="admin-panel--full"><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>{english ? 'Time' : '时间'}</th><th>{english ? 'Item' : '审核对象'}</th><th>{english ? 'Result' : '结果'}</th><th>{english ? 'Reviewer' : '审核人'}</th></tr></thead><tbody><tr><td colSpan={4} className="admin-table__empty">{common.noData}</td></tr></tbody></table></div></AdminPanel>
     </div>
   );
 }
@@ -364,13 +320,12 @@ export function AdminDashboard() {
   const language = useSiteLanguage();
   const english = language === 'en';
   const common = english ? copy.en : copy.zh;
-  const [activeSection, setActiveSection] = useState<AdminSection>('dashboard');
+  const [activeSection, setActiveSection] = useState<AdminSection>('permissions');
   const [navigationOpen, setNavigationOpen] = useState(false);
   const activeItem = navigation.find((item) => item.id === activeSection) ?? navigation[0];
 
   function renderContent() {
     switch (activeSection) {
-      case 'pages': return <PagesView english={english} common={common} />;
       case 'permissions': return <PermissionsView english={english} common={common} />;
       case 'api': return <ApiView english={english} common={common} />;
       case 'storage': return <StorageView english={english} common={common} />;
@@ -380,7 +335,7 @@ export function AdminDashboard() {
       case 'review': return <ReviewView english={english} common={common} />;
       case 'logs': return <LogsView english={english} common={common} />;
       case 'updates': return <UpdatesView english={english} common={common} />;
-      default: return <DashboardView english={english} />;
+      default: return <PermissionsView english={english} common={common} />;
     }
   }
 
@@ -398,7 +353,7 @@ export function AdminDashboard() {
         </nav>
       </aside>
       <section className="admin-workspace" aria-labelledby="admin-view-title">
-        <header className="admin-workspace__header"><div><h1 id="admin-view-title">{english ? activeItem.label.en : activeItem.label.zh}</h1></div><div className="admin-workspace__health"><CheckCircle2 size={17} strokeWidth={2} /><span>{english ? 'Systems healthy' : '系统运行正常'}</span></div></header>
+        <header className="admin-workspace__header"><div><h1 id="admin-view-title">{english ? activeItem.label.en : activeItem.label.zh}</h1></div></header>
         <div className="admin-workspace__content">{renderContent()}</div>
       </section>
     </div>

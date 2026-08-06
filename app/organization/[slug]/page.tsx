@@ -11,7 +11,7 @@ export default async function OrganizationPreviewRoute({ params }: { params: Pro
       initialNightMode={preferences.nightMode}
       initialSessionAccount={preferences.sessionAccount}
     >
-      <AccountPreviewPage kind="organization" id={slug} />
+      <AccountPreviewPage kind="organization" id={slug} sessionAccount={preferences.sessionAccount} />
     </HomeShell>
   );
 }
