@@ -149,6 +149,7 @@ export function serializeProject(project: FullProject, options?: { includePrivat
     name: { zh: project.name, en: project.nameEn ?? project.name },
     summary: { zh: project.summary, en: project.summaryEn ?? project.summary },
     description: { zh: project.description ?? '', en: project.descriptionEn ?? project.description ?? '' },
+    iconUrl: project.iconUrl,
     visibility: project.visibility.toLowerCase(),
     status: project.status.toLowerCase(),
     license: project.license,
@@ -196,6 +197,7 @@ export function serializeProfileProject(project: ProfileProject) {
     name: { zh: project.name, en: project.nameEn ?? project.name },
     summary: { zh: project.summary, en: project.summaryEn ?? project.summary },
     description: { zh: project.description ?? '', en: project.descriptionEn ?? project.description ?? '' },
+    iconUrl: project.iconUrl,
     tags: project.tags.map(({ tag }) => ({ slug: tag.slug, name: tag.name, nameEn: tag.nameEn ?? tag.name })),
     stats: {
       downloads: project.downloadCount,

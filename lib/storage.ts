@@ -204,7 +204,7 @@ export function getStorageAdapter(): StorageAdapter {
   return driver() === 's3' ? s3Adapter : localAdapter;
 }
 
-export function createObjectKey(prefix: 'avatars' | 'projects' | 'releases', name: string): string {
+export function createObjectKey(prefix: 'avatars' | 'projects' | 'project-icons' | 'releases', name: string): string {
   return objectKey(prefix, name);
 }
 

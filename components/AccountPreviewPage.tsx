@@ -22,6 +22,7 @@ type ProfileProject = {
   type: ProjectType;
   name: { zh: string; en: string };
   description: { zh: string; en: string };
+  iconUrl?: string | null;
   tags: Array<{ zh: string; en: string }>;
   summary?: { zh: string; en: string };
   slug?: string;
@@ -166,10 +167,10 @@ export function AccountPreviewPage({ kind, id, sessionAccount = null }: AccountP
   }, [id, kind, language, page, projectType, reloadToken]);
 
   const profileProjects: ProfileProject[] = (profile?.projects ?? []).map((project) => {
-    const item = project as { id: string; slug?: string; type?: string; name?: { zh: string; en: string }; summary?: { zh: string; en: string }; description?: { zh: string; en: string }; tags?: Array<{ name: string; nameEn: string }>; stats?: { downloads: number; followers: number } };
+    const item = project as { id: string; slug?: string; type?: string; name?: { zh: string; en: string }; summary?: { zh: string; en: string }; description?: { zh: string; en: string }; iconUrl?: string | null; tags?: Array<{ name: string; nameEn: string }>; stats?: { downloads: number; followers: number } };
     const rawType = item.type ?? 'mod';
     const normalizedType = rawType === 'modpack' ? 'modpacks' : rawType === 'theme_pack' || rawType === 'theme-pack' ? 'theme-pack' : rawType === 'server' ? 'server' : 'mods';
-    return { id: item.slug ?? item.id, slug: item.slug, type: normalizedType as ProjectType, name: item.name ?? { zh: '', en: '' }, description: item.summary ?? item.description ?? { zh: '', en: '' }, tags: (item.tags ?? []).map((tag) => ({ zh: tag.name, en: tag.nameEn })), stats: item.stats };
+    return { id: item.slug ?? item.id, slug: item.slug, type: normalizedType as ProjectType, name: item.name ?? { zh: '', en: '' }, description: item.summary ?? item.description ?? { zh: '', en: '' }, iconUrl: typeof item.iconUrl === 'string' ? item.iconUrl : null, tags: (item.tags ?? []).map((tag) => ({ zh: tag.name, en: tag.nameEn })), stats: item.stats };
   });
   const visibleProjects = profileProjects.filter((project) => project.type === projectType);
   const projectCount = Number(profile?.projectStats?.projects ?? profileProjects.length);
@@ -334,15 +335,16 @@ export function AccountPreviewPage({ kind, id, sessionAccount = null }: AccountP
               {loading ? <p className="profile-projects__empty">{text.loadingProjects}</p> : loadError ? <p className="profile-projects__empty">{loadError} <button className="auth-code-button" type="button" onClick={() => setReloadToken((value) => value + 1)}>{text.retry}</button></p> : visibleProjects.length > 0 ? visibleProjects.map((project) => {
                 const projectName = language === 'en' ? project.name.en : project.name.zh;
                 const projectDescription = language === 'en' ? project.description.en : project.description.zh;
+                const iconUrl = project.iconUrl || '/brand/vintage-story-game-logo.png';
                 return (
                   <Link className={`content-card content-card--${viewMode} content-card--interactive`} href={`/${project.type === 'modpacks' ? 'modpack' : 'mod'}/${project.id}`} key={project.id}>
                     <div className="content-card__media">
-                      <img src="/brand/vintage-story-game-logo.png" alt={projectName} loading="lazy" />
+                      <img src={iconUrl} alt={projectName} loading="lazy" />
                     </div>
                     <div className="content-card__body">
                       <div className="content-card__summary">
                         <div className="content-card__icon" aria-hidden="true">
-                          <img src="/brand/vintage-story-game-logo.png" alt="" loading="lazy" />
+                          <img src={iconUrl} alt="" loading="lazy" />
                         </div>
                         <div className="content-card__copy">
                           <h2 className="content-card__title">

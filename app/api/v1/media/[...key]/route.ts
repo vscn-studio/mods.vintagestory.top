@@ -38,12 +38,16 @@ export async function GET(request: NextRequest, { params }: Params) {
     if (!canReadProject(actor, screenshot.project as never)) return jsonError('NOT_FOUND', '媒体不存在。', 404, request);
     isPublic = screenshot.project.visibility === 'PUBLIC' && screenshot.project.status === 'ACTIVE' && !screenshot.project.ownerOrganization?.archivedAt;
   } else {
-    const [organization, account, object] = await Promise.all([
+    const [projectIcon, organization, account, object] = await Promise.all([
+      auth.db.project.findFirst({ where: { iconUrl: mediaUrl }, include: { members: true, ownerOrganization: { include: { members: true } } } }),
       auth.db.organization.findFirst({ where: { avatarUrl: mediaUrl }, include: { members: true } }),
       auth.db.account.findFirst({ where: { avatarUrl: mediaUrl }, select: { id: true, status: true } }),
       auth.db.storageObject.findUnique({ where: { objectKey }, select: { mimeType: true, deletedAt: true } })
     ]);
-    if (organization) {
+    if (projectIcon) {
+      if (!canReadProject(actor, projectIcon as never)) return jsonError('NOT_FOUND', '媒体不存在。', 404, request);
+      isPublic = projectIcon.visibility === 'PUBLIC' && projectIcon.status === 'ACTIVE' && !projectIcon.ownerOrganization?.archivedAt;
+    } else if (organization) {
       const member = Boolean(actor && (organization.ownerId === actor.id || organization.members.some((item) => item.accountId === actor.id)));
       if (organization.archivedAt || (organization.visibility === 'PRIVATE' && !member && !actor?.siteRoles.includes('ADMIN'))) return jsonError('NOT_FOUND', '媒体不存在。', 404, request);
       isPublic = organization.visibility === 'PUBLIC' && !organization.archivedAt;

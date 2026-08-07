@@ -28,6 +28,7 @@ type PreviewLocalizedValue = {
 
 type PreviewContent = {
   name: { zh: string; en: string };
+  iconUrl?: string | null;
   author?: string;
   authorType: 'user' | 'organization';
   authorId: string;
@@ -490,7 +491,7 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
         <header className="preview-hero">
           <div className="preview-hero__media-column">
             <div className="preview-hero__media">
-              <img src="/brand/vintage-story-game-logo.png" alt="" />
+              <img src={current.iconUrl || '/brand/vintage-story-game-logo.png'} alt="" />
             </div>
           </div>
           <div className="preview-hero__copy">

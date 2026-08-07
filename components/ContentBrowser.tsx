@@ -100,6 +100,7 @@ type ApiProject = {
   type: string;
   name: { zh: string; en: string };
   summary: { zh: string; en: string };
+  iconUrl?: string | null;
   owner: { type: 'user' | 'organization'; id: string; slug?: string; username?: string; name: string } | null;
   tags: Array<{ slug: string; name: string; nameEn: string }>;
   stats: { downloads: number; followers: number };
@@ -354,6 +355,7 @@ export function ContentBrowser() {
                 const name = language === 'en' ? mod.name.en : mod.name.zh;
                 const description = language === 'en' ? mod.summary.en : mod.summary.zh;
                 const updated = formatDate(mod.updatedAt);
+                const iconUrl = mod.iconUrl || '/brand/vintage-story-game-logo.png';
                 const ownerType = mod.owner?.type ?? 'user';
                 const ownerId = ownerType === 'organization' ? mod.owner?.slug ?? mod.owner?.id ?? '' : mod.owner?.username ?? mod.owner?.id ?? '';
                 const ownerName = mod.owner?.name ?? (language === 'en' ? 'Unknown creator' : '未知作者');
@@ -374,13 +376,13 @@ export function ContentBrowser() {
                     }}
                   >
                     <div className="content-card__media">
-                      <img src="/brand/vintage-story-game-logo.png" alt={name} loading="lazy" />
+                      <img src={iconUrl} alt={name} loading="lazy" />
                     </div>
 
                     <div className="content-card__body">
                       <div className="content-card__summary">
                         <div className="content-card__icon" aria-hidden="true">
-                          <img src="/brand/vintage-story-game-logo.png" alt="" loading="lazy" />
+                          <img src={iconUrl} alt="" loading="lazy" />
                         </div>
                         <div className="content-card__copy">
                           <h2 className="content-card__title">
