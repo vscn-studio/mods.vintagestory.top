@@ -13,12 +13,14 @@ import {
   ExternalLink,
   FilePenLine,
   FileUp,
+  HardDrive,
   ImagePlus,
   Images,
   Info,
   Lightbulb,
   Link2,
   LoaderCircle,
+  Monitor,
   Save,
   Scale,
   Send,
@@ -29,6 +31,8 @@ import {
   UsersRound
 } from 'lucide-react';
 import { type ChangeEvent, type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
+import { ContentSelect, type ContentSelectOption } from '@/components/ContentSelect';
+import { GameVersionPicker } from '@/components/GameVersionPicker';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
 import { ensureCsrfToken, requestConfirmation } from '@/lib/client-confirmation';
 
@@ -152,6 +156,7 @@ const copy = {
     deleteScreenshot: '删除截图',
     noFiles: '尚未上传文件。',
     noScreenshots: '尚未上传截图。',
+    noData: '暂无数据',
     releaseImmutable: '此版本已进入审核或发布流程，不能再编辑文件。',
     invitationSent: '邀请已发送，等待对方接受。',
     general: '通用', taxonomy: '标签与分类', descriptionSection: '描述', license: '许可证', gallery: '图库', links: '相关链接', analytics: '分析', navigation: '项目设置导航', checklist: '发布前检查单', checklistHide: '收起检查项', checklistShow: '显示检查项', required: '强制', warning: '警告', recommendation: '建议', complete: '已完成', projectInformation: '项目信息', projectUrl: '项目地址', urlImmutable: '项目地址创建后不可修改。', saveChanges: '保存更改', taxonomyDescription: '设置用于目录筛选和项目发现的标签、分类及兼容信息。', tags: '标签', categories: '分类', gameVersions: '游戏版本', descriptionDescription: '使用完整的项目说明，帮助玩家了解功能、安装方式与兼容性。', licenseDescription: '明确项目分发与使用条件。', linksDescription: '添加玩家、贡献者和维护者需要的外部链接。', repository: '代码仓库', issues: '问题追踪', wiki: '文档站点', discord: '社群链接', sponsor: '赞助链接', analyticsDescription: '公开项目的累计数据。', downloads: '下载', followers: '关注', favorites: '收藏', comments: '评论', checklistRelease: '上传一个版本', checklistReleaseDescription: '项目提交审核前至少需要有一个版本。', checklistDescription: '添加项目描述', checklistDescriptionDescription: '请提供能清晰说明项目目的与功能的详细介绍。', checklistLicense: '选择一个许可证', checklistLicenseDescription: '选择项目分发所使用的许可证。', checklistSummary: '扩充你的简介', checklistSummaryDescription: '建议至少使用 30 个字符，使简介完整且易于理解。', checklistGallery: '添加展示图', checklistGalleryDescription: '展示图能帮助玩家快速了解项目内容。', checklistLinks: '添加外部链接', checklistLinksDescription: '可添加代码仓库、问题追踪或社群地址。', openVersions: '前往版本', openDescription: '前往描述', openLicense: '前往许可证', openGallery: '前往图库', openLinks: '前往链接', noDescription: '尚未添加描述。', noLicense: '尚未选择许可证。', noLinks: '尚未添加外部链接。', archiveDescription: '归档后项目将不再显示在公开目录中。', ownerActions: '所有权操作'
@@ -200,6 +205,7 @@ const copy = {
     deleteScreenshot: 'Delete screenshot',
     noFiles: 'No files uploaded.',
     noScreenshots: 'No screenshots uploaded.',
+    noData: 'No data',
     releaseImmutable: 'This release is being reviewed or published and its files cannot be changed.',
     invitationSent: 'Invitation sent. It will appear after the recipient accepts.', general: 'General', taxonomy: 'Tags & categories', descriptionSection: 'Description', license: 'License', gallery: 'Gallery', links: 'Links', analytics: 'Analytics', navigation: 'Project settings navigation', checklist: 'Publishing checklist', checklistHide: 'Hide checklist', checklistShow: 'Show checklist', required: 'Required', warning: 'Warning', recommendation: 'Recommendation', complete: 'Complete', projectInformation: 'Project information', projectUrl: 'Project URL', urlImmutable: 'The project URL cannot be changed after creation.', saveChanges: 'Save changes', taxonomyDescription: 'Configure tags, categories, and compatibility details used for discovery.', tags: 'Tags', categories: 'Categories', gameVersions: 'Game versions', descriptionDescription: 'Write a complete project description so players understand features, installation, and compatibility.', licenseDescription: 'Set the terms for distributing and using this project.', linksDescription: 'Add external resources for players, contributors, and maintainers.', repository: 'Repository', issues: 'Issue tracker', wiki: 'Documentation', discord: 'Community link', sponsor: 'Sponsor link', analyticsDescription: 'Public totals for this project.', downloads: 'Downloads', followers: 'Followers', favorites: 'Favorites', comments: 'Comments', checklistRelease: 'Upload a release', checklistReleaseDescription: 'A project needs at least one release before it can be submitted for review.', checklistDescription: 'Add a project description', checklistDescriptionDescription: 'Provide a detailed description of the project purpose and functionality.', checklistLicense: 'Choose a license', checklistLicenseDescription: 'Choose the license used to distribute this project.', checklistSummary: 'Expand your summary', checklistSummaryDescription: 'Use at least 30 characters so the summary is useful and clear.', checklistGallery: 'Add a showcase image', checklistGalleryDescription: 'A showcase image helps players understand the project at a glance.', checklistLinks: 'Add external links', checklistLinksDescription: 'Link a repository, issue tracker, or community space.', openVersions: 'Open releases', openDescription: 'Open description', openLicense: 'Open license', openGallery: 'Open gallery', openLinks: 'Open links', noDescription: 'No description has been added.', noLicense: 'No license has been selected.', noLinks: 'No external links have been added.', archiveDescription: 'Archived projects are removed from the public directory.', ownerActions: 'Ownership actions'
   }
@@ -234,6 +240,13 @@ function releaseCanEdit(status: string): boolean {
   return status === 'draft' || status === 'rejected';
 }
 
+function normalizeEnvironmentValue(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'client' || value.trim() === '客户端') return 'client';
+  if (normalized === 'server' || value.trim() === '服务端') return 'server';
+  return normalized;
+}
+
 type ProjectSection = 'general' | 'taxonomy' | 'description' | 'versions' | 'license' | 'gallery' | 'links' | 'members' | 'analytics';
 
 export function ProjectManagementPage({ id }: ProjectManagementProps) {
@@ -251,6 +264,9 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
   const [transferTarget, setTransferTarget] = useState('');
   const [activeSection, setActiveSection] = useState<ProjectSection>('general');
   const [checklistOpen, setChecklistOpen] = useState(true);
+  const [visibility, setVisibility] = useState('public');
+  const [taxonomyGameVersions, setTaxonomyGameVersions] = useState<string[]>([]);
+  const [taxonomyEnvironments, setTaxonomyEnvironments] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -271,6 +287,13 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
     void ensureCsrfToken();
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!project) return;
+    setVisibility(project.visibility);
+    setTaxonomyGameVersions(project.gameVersions);
+    setTaxonomyEnvironments([...new Set(project.environments.map((environment) => normalizeEnvironmentValue(environment.slug || environment.name)).filter(Boolean))]);
+  }, [project]);
 
   async function updateProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -555,6 +578,28 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
   const hasDescription = Boolean(project.description[localizedKey].trim());
   const hasLicense = Boolean(project.license?.trim());
   const hasLinks = Object.values(project.links ?? {}).some(Boolean);
+  const visibilityOptions: ContentSelectOption[] = [
+    { value: 'public', label: text.public },
+    { value: 'private', label: text.private }
+  ];
+  const transferOptions: ContentSelectOption[] = [
+    { value: 'personal', label: text.personal },
+    { value: 'organization', label: text.organization }
+  ];
+  const memberRoleOptions: ContentSelectOption[] = [
+    { value: 'maintainer', label: 'Maintainer' },
+    { value: 'contributor', label: 'Contributor' },
+    { value: 'reviewer', label: 'Reviewer' },
+    { value: 'viewer', label: 'Viewer' }
+  ];
+  const environmentOptions = [
+    { value: 'client', label: language === 'en' ? 'Client' : '客户端', icon: Monitor },
+    { value: 'server', label: language === 'en' ? 'Server' : '服务端', icon: HardDrive }
+  ];
+  const environmentLabel = (value: string) => environmentOptions.find((option) => option.value === value)?.label ?? value;
+  const toggleTaxonomyEnvironment = (value: string) => {
+    setTaxonomyEnvironments((current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
+  };
   const navItems = [
     { id: 'general' as const, label: text.general, icon: Info, available: canUpdate },
     { id: 'taxonomy' as const, label: text.taxonomy, icon: Tags, available: canUpdate },
@@ -637,23 +682,50 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
             <label className="management-field"><span>{text.name}</span><input name="name" defaultValue={project.name[localizedKey]} maxLength={120} required /></label>
             <label className="management-field"><span>{text.projectUrl}</span><input value={project.slug} readOnly aria-readonly="true" /></label>
             <label className="management-field"><span>{text.summary}</span><textarea name="summary" defaultValue={project.summary[localizedKey]} rows={3} maxLength={500} required /></label>
-            <label className="management-field"><span>{text.visibility}</span><select name="visibility" defaultValue={project.visibility}><option value="public">{text.public}</option><option value="private">{text.private}</option></select></label>
+            <div className="management-field">
+              <span>{text.visibility}</span>
+              <input type="hidden" name="visibility" value={visibility} />
+              <ContentSelect className="management-content-select" ariaLabel={text.visibility} value={visibility} options={visibilityOptions} onChange={setVisibility} />
+            </div>
             <div className="management-form__actions"><button className="management-button management-button--primary" type="submit"><Save size={16} />{saved ? text.saved : text.saveChanges}</button></div>
           </form>
-          {canTransfer ? <section className="management-subsection"><div><h3>{text.ownerActions}</h3><p>{text.transferTarget}</p></div><form className="management-inline-form" onSubmit={transferProject}><select value={transferType} onChange={(event) => setTransferType(event.target.value as 'personal' | 'organization')}><option value="personal">{text.personal}</option><option value="organization">{text.organization}</option></select><input value={transferTarget} onChange={(event) => setTransferTarget(event.target.value)} placeholder={text.transferTarget} maxLength={120} required /><button className="management-button" type="submit"><ArrowRightLeft size={16} />{text.transfer}</button></form></section> : null}
+          {canTransfer ? <section className="management-subsection"><div><h3>{text.ownerActions}</h3><p>{text.transferTarget}</p></div><form className="management-inline-form" onSubmit={transferProject}><ContentSelect className="management-content-select management-content-select--compact" ariaLabel={text.transfer} value={transferType} options={transferOptions} onChange={(value) => setTransferType(value as 'personal' | 'organization')} /><input value={transferTarget} onChange={(event) => setTransferTarget(event.target.value)} placeholder={text.transferTarget} maxLength={120} required /><button className="management-button" type="submit"><ArrowRightLeft size={16} />{text.transfer}</button></form></section> : null}
           {canArchive ? <section className="management-danger-zone"><div><h3>{text.archive}</h3><p>{text.archiveDescription}</p></div><button className="management-button management-button--danger" type="button" onClick={() => void archiveProject()}><Archive size={16} />{text.archive}</button></section> : null}
         </section> : null}
 
         {canUpdate && currentSection === 'taxonomy' ? <section className="management-panel">
           <div className="management-panel__heading"><div><h2>{text.taxonomy}</h2><p>{text.taxonomyDescription}</p></div></div>
-          <form className="management-form management-form--panel" onSubmit={updateProject}>
-            <label className="management-field"><span>{text.tags}</span><input name="tags" defaultValue={project.tags.map((item) => item.name).join(', ')} maxLength={600} /></label>
-            <label className="management-field"><span>{text.categories}</span><input name="categories" defaultValue={project.categories.map((item) => item.name).join(', ')} maxLength={600} /></label>
-            <label className="management-field"><span>{text.gameVersions}</span><input name="gameVersions" defaultValue={project.gameVersions.join(', ')} maxLength={600} /></label>
-            <label className="management-field"><span>{text.environments}</span><input name="environments" defaultValue={project.environments.map((item) => item.name).join(', ')} maxLength={600} /></label>
-            <p className="management-form__hint">{language === 'en' ? 'Separate multiple values with commas.' : '多个值请使用逗号分隔。'}</p>
-            <div className="management-form__actions"><button className="management-button management-button--primary" type="submit"><Save size={16} />{saved ? text.saved : text.saveChanges}</button></div>
-          </form>
+          <div className="management-taxonomy-layout">
+            <form className="management-form management-form--panel" onSubmit={updateProject}>
+              <label className="management-field"><span>{text.tags}</span><span className="game-version-picker__search management-taxonomy-search"><input name="tags" type="search" defaultValue={project.tags.map((item) => item.name).join(', ')} maxLength={600} /></span></label>
+              <label className="management-field"><span>{text.categories}</span><span className="game-version-picker__search management-taxonomy-search"><input name="categories" type="search" defaultValue={project.categories.map((item) => item.name).join(', ')} maxLength={600} /></span></label>
+              <div className="management-field">
+                <span>{text.gameVersions}</span>
+                <input type="hidden" name="gameVersions" value={taxonomyGameVersions.join(',')} />
+                <GameVersionPicker value={taxonomyGameVersions} onChange={setTaxonomyGameVersions} ariaLabel={text.gameVersions} />
+              </div>
+              <div className="management-field">
+                <span>{text.environments}</span>
+                <input type="hidden" name="environments" value={taxonomyEnvironments.join(',')} />
+                <div className="content-filter-options management-environment-options">
+                  {environmentOptions.map((option) => {
+                    const Icon = option.icon;
+                    const selected = taxonomyEnvironments.includes(option.value);
+                    return <div className="content-filter-option" key={option.value}><button className={selected ? 'content-filter-option__button content-filter-option__button--selected' : 'content-filter-option__button'} type="button" aria-pressed={selected} onClick={() => toggleTaxonomyEnvironment(option.value)}><span className="content-filter-option__icon"><Icon size={16} strokeWidth={2} aria-hidden="true" /></span><span className="content-filter-option__label">{option.label}</span><Check className="content-filter-option__check" size={16} strokeWidth={2} aria-hidden="true" /></button></div>;
+                  })}
+                </div>
+              </div>
+              <p className="management-form__hint">{language === 'en' ? 'Separate tags and categories with commas.' : '标签和分类可使用逗号分隔。'}</p>
+              <div className="management-form__actions"><button className="management-button management-button--primary" type="submit"><Save size={16} />{saved ? text.saved : text.saveChanges}</button></div>
+            </form>
+            <aside className="preview-sidebar__section preview-compatibility-section management-compatibility-preview">
+              <div className="preview-section__heading"><h2>{language === 'en' ? 'Compatibility' : '兼容性'}</h2></div>
+              <dl className="preview-detail-list">
+                <div><dt>{text.gameVersions}</dt><dd><ul className="preview-sidebar-tags preview-sidebar-tags--compact" aria-label={text.gameVersions}>{taxonomyGameVersions.length ? taxonomyGameVersions.map((gameVersion) => <li key={gameVersion}>{gameVersion}</li>) : <li>{text.noData}</li>}</ul></dd></div>
+                <div><dt>{text.environments}</dt><dd><ul className="preview-sidebar-tags preview-sidebar-tags--compact" aria-label={text.environments}>{taxonomyEnvironments.length ? taxonomyEnvironments.map((environment) => <li key={environment}>{environmentLabel(environment)}</li>) : <li>{text.noData}</li>}</ul></dd></div>
+              </dl>
+            </aside>
+          </div>
         </section> : null}
 
         {canUpdate && currentSection === 'description' ? <section className="management-panel">
@@ -693,12 +765,7 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
           <div className="management-panel__heading"><div><h2>{text.members}</h2><p>{language === 'en' ? 'Manage project roles and membership.' : '管理项目成员和角色。'}</p></div></div>
           <form className="management-inline-form" onSubmit={addMember}>
             <input value={memberUsername} onChange={(event) => setMemberUsername(event.target.value)} placeholder={text.username} maxLength={80} required />
-            <select value={memberRole} onChange={(event) => setMemberRole(event.target.value)}>
-              <option value="maintainer">Maintainer</option>
-              <option value="contributor">Contributor</option>
-              <option value="reviewer">Reviewer</option>
-              <option value="viewer">Viewer</option>
-            </select>
+            <ContentSelect className="management-content-select management-content-select--compact" ariaLabel={text.role} value={memberRole} options={memberRoleOptions} onChange={setMemberRole} />
             <button className="auth-code-button" type="submit"><UserPlus size={16} />{text.invite}</button>
           </form>
           <ul className="management-member-list">
@@ -707,12 +774,7 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
                 <span><strong>{member.name}</strong><small>{member.username} · {member.role}</small></span>
                 {member.role === 'owner' ? null : (
                   <span className="admin-actions">
-                    <select aria-label={`${text.role}: ${member.username}`} value={member.role} onChange={(event) => void changeMember(member, event.target.value)}>
-                      <option value="maintainer">Maintainer</option>
-                      <option value="contributor">Contributor</option>
-                      <option value="reviewer">Reviewer</option>
-                      <option value="viewer">Viewer</option>
-                    </select>
+                    <ContentSelect className="management-content-select management-content-select--compact management-content-select--role" ariaLabel={`${text.role}: ${member.username}`} value={member.role} options={memberRoleOptions} onChange={(role) => void changeMember(member, role)} />
                     <button className="admin-icon-button" type="button" title={text.remove} aria-label={text.remove} onClick={() => void removeMember(member)}><Trash2 size={16} /></button>
                   </span>
                 )}

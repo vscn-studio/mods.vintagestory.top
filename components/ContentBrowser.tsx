@@ -3,7 +3,8 @@
 import { AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Download, Grid2X2, HardDrive, Heart, List, LoaderCircle, Monitor, Search } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
+import { ContentSelect } from '@/components/ContentSelect';
 import { GameVersionPicker } from '@/components/GameVersionPicker';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
 import { normalizeGameVersionFilter } from '@/lib/game-versions';
@@ -111,81 +112,6 @@ function getActiveType(pathname: string, queryType: string | null): ContentType 
   if (pathname === '/modpacks') return 'modpacks';
   if (queryType === 'theme-pack' || queryType === 'server') return queryType;
   return 'mods';
-}
-
-type ContentSelectOption = {
-  value: string;
-  label: string;
-};
-
-type ContentSelectProps = {
-  className?: string;
-  label: string;
-  value: string;
-  options: ContentSelectOption[];
-  onChange: (value: string) => void;
-};
-
-function ContentSelect({ className = '', label, value, options, onChange }: ContentSelectProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const selectedOption = options.find((option) => option.value === value) ?? options[0];
-
-  useEffect(() => {
-    function handlePointerDown(event: PointerEvent) {
-      if (!menuRef.current?.contains(event.target as Node)) setIsOpen(false);
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setIsOpen(false);
-    }
-
-    document.addEventListener('pointerdown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
-
-  return (
-    <div className={`content-select-menu${className ? ` ${className}` : ''}`} ref={menuRef}>
-      <button
-        className={isOpen ? 'content-select content-select--open' : 'content-select'}
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-        onClick={() => setIsOpen((open) => !open)}
-      >
-        <span className="content-select__label">{label}</span>
-        <span className="content-select__value">{selectedOption?.label}</span>
-        <ChevronDown className={isOpen ? 'content-select__chevron content-select__chevron--up' : 'content-select__chevron'} size={15} strokeWidth={1.8} aria-hidden="true" />
-      </button>
-
-      <div
-        className={isOpen ? 'content-select-popover content-select-popover--open' : 'content-select-popover'}
-        role="listbox"
-        aria-hidden={!isOpen}
-        aria-label={label}
-      >
-        {options.map((option) => (
-          <button
-            className={option.value === value ? 'content-select-option content-select-option--active' : 'content-select-option'}
-            key={option.value}
-            type="button"
-            role="option"
-            aria-selected={option.value === value}
-            onClick={() => {
-              onChange(option.value);
-              setIsOpen(false);
-            }}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 export function ContentBrowser() {

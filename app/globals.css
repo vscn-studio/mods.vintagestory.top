@@ -6520,6 +6520,22 @@ summary:active {
   gap: 18px;
 }
 
+.management-taxonomy-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 680px) minmax(220px, 280px);
+  align-items: start;
+  gap: 28px;
+}
+
+.management-taxonomy-layout .management-form--panel {
+  max-width: none;
+}
+
+.management-compatibility-preview {
+  min-width: 0;
+  margin: 0;
+}
+
 .management-field {
   display: grid;
   gap: 7px;
@@ -6554,6 +6570,59 @@ summary:active {
 
 .management-field textarea,
 .management-release__form textarea { resize: vertical; }
+
+.management-field .management-taxonomy-search {
+  display: flex;
+  width: 100%;
+}
+
+.management-field .management-taxonomy-search input {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 0.78rem;
+}
+
+.management-field .management-taxonomy-search input:focus {
+  border-color: var(--olive);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--olive) 18%, transparent);
+  background: var(--paper);
+}
+
+.management-environment-options {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper-bright);
+}
+
+.management-content-select {
+  width: 100%;
+}
+
+.management-content-select .content-select {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.management-content-select .content-select-popover {
+  z-index: 12;
+}
+
+.management-inline-form .management-content-select {
+  width: auto;
+  flex: 0 1 160px;
+}
+
+.management-inline-form .management-content-select .content-select {
+  width: 100%;
+}
+
+.management-member-list .management-content-select--role {
+  width: 138px;
+}
 
 .management-field input[readonly] {
   background: color-mix(in srgb, var(--paper) 76%, var(--hover-surface));
@@ -6694,6 +6763,7 @@ summary:active {
   .management-sidebar { position: static; margin-bottom: 18px; }
   .management-nav { display: flex; overflow-x: auto; padding: 6px; }
   .management-nav__item { width: auto; flex: 0 0 auto; white-space: nowrap; }
+  .management-taxonomy-layout { grid-template-columns: minmax(0, 1fr); }
   .management-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -6711,8 +6781,10 @@ summary:active {
   .management-inline-form { align-items: stretch; }
   .management-inline-form input,
   .management-inline-form select,
+  .management-inline-form .management-content-select,
   .management-inline-form .auth-code-button,
   .management-inline-form .management-button { width: 100%; }
+  .management-member-list .management-content-select--role { width: 100%; }
   .management-release { grid-template-columns: 1fr; }
   .management-release > div { grid-column: auto; }
   .management-release .auth-code-button { width: 100%; }
