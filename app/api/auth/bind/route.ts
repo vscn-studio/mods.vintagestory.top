@@ -6,13 +6,16 @@ import {
   findBindingConflict,
   getPendingIdentity,
   normalizeEmail,
-  setAccountSession,
+  createAccountSession,
   upsertModAccount
 } from '@/lib/auth-server';
+import { checkCsrf, rateLimit } from '@/lib/request-security';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
+  if (!checkCsrf(request)) return NextResponse.json({ ok: false, message: '请求来源校验失败。' }, { status: 403 });
+  if (!rateLimit(request, 20)) return NextResponse.json({ ok: false, message: '请求过于频繁，请稍后重试。' }, { status: 429 });
   const identity = getPendingIdentity(request);
   if (!identity) {
     return NextResponse.json(
@@ -106,6 +109,9 @@ export async function POST(request: NextRequest) {
       { status: 503, headers: { 'Cache-Control': 'no-store' } }
     );
   }
+  if (account.status !== 'ACTIVE') {
+    return NextResponse.json({ ok: false, code: 'ACCOUNT_DISABLED', message: '该账号已被停用，无法登录。' }, { status: 403, headers: { 'Cache-Control': 'no-store' } });
+  }
   const response = NextResponse.json({
     ok: true,
     account: {
@@ -115,7 +121,11 @@ export async function POST(request: NextRequest) {
       bindEmail: account.bindEmail
     }
   }, { headers: { 'Cache-Control': 'no-store' } });
-  setAccountSession(response, account.id);
+  try {
+    await createAccountSession(response, account.id, request);
+  } catch {
+    return NextResponse.json({ ok: false, message: '会话服务暂时不可用，请稍后重试。' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+  }
   clearPendingIdentity(response);
   return response;
 }

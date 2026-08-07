@@ -3,7 +3,7 @@ import {
   authenticateIdentity,
   clearPendingIdentity,
   normalizeGroups,
-  setAccountSession,
+  createAccountSession,
   setPendingIdentity
 } from '@/lib/auth-server';
 import { publicOrigin, publicUrl } from '@/lib/web-url';
@@ -27,7 +27,11 @@ function clearOidcCookies(response: NextResponse): void {
 function errorRedirect(request: NextRequest, message: string): NextResponse {
   const url = publicUrl(request, '/');
   url.searchParams.set('auth_error', message);
-  return NextResponse.redirect(url);
+  const response = NextResponse.redirect(url);
+  // Clear state/verifier even on failed callbacks so a captured callback URL
+  // cannot be replayed against a still-live browser cookie.
+  clearOidcCookies(response);
+  return response;
 }
 
 function safeReturnTo(request: NextRequest, candidate: string | undefined): string {
@@ -140,11 +144,18 @@ export async function GET(request: NextRequest) {
   if (authentication.status === 'provider-conflict') {
     return errorRedirect(request, '该邮箱已绑定另外一个社区账号。');
   }
+  if (authentication.status === 'authenticated' && authentication.account.status !== 'ACTIVE') {
+    return errorRedirect(request, '该账号已被停用，无法登录。');
+  }
 
   if (authentication.status !== 'authenticated') redirect.searchParams.set('auth', 'community');
   const response = NextResponse.redirect(redirect);
   if (authentication.status === 'authenticated') {
-    setAccountSession(response, authentication.account.id);
+    try {
+      await createAccountSession(response, authentication.account.id, request);
+    } catch {
+      return errorRedirect(request, '会话服务暂时不可用，请稍后重试。');
+    }
   } else {
     setPendingIdentity(response, identity);
   }

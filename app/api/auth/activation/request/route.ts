@@ -8,6 +8,7 @@ import {
   issueActivationChallenge,
   normalizeEmail
 } from '@/lib/auth-server';
+import { checkCsrf, rateLimit } from '@/lib/request-security';
 
 export const runtime = 'nodejs';
 
@@ -16,6 +17,8 @@ function errorResponse(message: string, status = 400, extra?: Record<string, unk
 }
 
 export async function POST(request: NextRequest) {
+  if (!checkCsrf(request)) return errorResponse('请求来源校验失败。', 403);
+  if (!rateLimit(request, 5)) return errorResponse('请求过于频繁，请稍后重试。', 429);
   const identity = getPendingIdentity(request);
   if (!identity) return errorResponse('认证状态已过期，请重新选择登录方式。', 401);
 

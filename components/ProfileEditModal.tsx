@@ -9,12 +9,15 @@ export type ProfileMember = {
   id: string;
   name: string;
   role: ProfileMemberRole;
+  username?: string;
   avatarUrl?: string;
 };
 
 export type ProfileEditValues = {
   name: string;
   avatarUrl?: string;
+  avatarFile?: File;
+  avatarRemoved?: boolean;
   description: string;
   members: ProfileMember[];
 };
@@ -28,7 +31,7 @@ type ProfileEditModalProps = {
   canManageMembers: boolean;
   english: boolean;
   onClose: () => void;
-  onSave: (values: ProfileEditValues) => void;
+  onSave: (values: ProfileEditValues) => void | Promise<void>;
 };
 
 const roleLabels = {
@@ -111,6 +114,9 @@ export function ProfileEditModal({
   const [memberName, setMemberName] = useState('');
   const [memberRole, setMemberRole] = useState<ProfileMemberRole>('member');
   const [error, setError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | undefined>();
+  const [avatarRemoved, setAvatarRemoved] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -131,16 +137,15 @@ export function ProfileEditModal({
     }
     const reader = new FileReader();
     reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setAvatarUrl(reader.result);
-        setError('');
-      }
+      if (typeof reader.result === 'string') { setAvatarUrl(reader.result); setAvatarFile(file); setAvatarRemoved(false); setError(''); }
     };
     reader.readAsDataURL(file);
   }
 
   function removeAvatar() {
     setAvatarUrl(undefined);
+    setAvatarFile(undefined);
+    setAvatarRemoved(true);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
@@ -150,12 +155,12 @@ export function ProfileEditModal({
       setError(text.memberRequired);
       return;
     }
-    const memberId = cleanName.toLocaleLowerCase().replace(/\s+/g, '-');
-    if (members.some((member) => member.id.toLocaleLowerCase() === memberId)) {
+    const username = cleanName.toLocaleLowerCase().replace(/\s+/g, '-');
+    if (members.some((member) => (member.username ?? member.id).toLocaleLowerCase() === username)) {
       setError(text.memberExists);
       return;
     }
-    setMembers((current) => [...current, { id: memberId, name: cleanName, role: memberRole }]);
+    setMembers((current) => [...current, { id: `pending:${username}`, username, name: cleanName, role: memberRole }]);
     setMemberName('');
     setError('');
   }
@@ -168,14 +173,21 @@ export function ProfileEditModal({
     setMembers((current) => current.filter((member) => member.id !== memberId));
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const cleanName = name.trim();
     if (!cleanName) {
       setError(text.nameRequired);
       return;
     }
-    onSave({ name: cleanName, avatarUrl, description: description.trim(), members });
+    setIsSaving(true);
+    try {
+      await onSave({ name: cleanName, avatarUrl, avatarFile, avatarRemoved, description: description.trim(), members });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : (english ? 'Save failed.' : '保存失败。'));
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
@@ -225,9 +237,9 @@ export function ProfileEditModal({
               <div className="profile-edit-member-list">
                 {members.map((member) => (
                   <div className="profile-edit-member" key={member.id}>
-                    <span className="profile-edit-member__identity"><span className="profile-edit-member__avatar">{member.avatarUrl ? <img src={member.avatarUrl} alt="" /> : member.name.slice(0, 1).toUpperCase()}</span><span><strong>{member.name}</strong><small>{member.id}</small></span></span>
+                    <span className="profile-edit-member__identity"><span className="profile-edit-member__avatar">{member.avatarUrl ? <img src={member.avatarUrl} alt="" /> : member.name.slice(0, 1).toUpperCase()}</span><span><strong>{member.name}</strong><small>{member.username ?? member.id}</small></span></span>
                     <span className="profile-edit-member__controls">
-                      <select value={member.role} aria-label={`${text.memberRole}: ${member.name}`} onChange={(event) => updateMemberRole(member.id, event.target.value as ProfileMemberRole)}>
+                      <select value={member.role} aria-label={`${text.memberRole}: ${member.name}`} disabled={member.role === 'owner'} onChange={(event) => updateMemberRole(member.id, event.target.value as ProfileMemberRole)}>
                         {(Object.keys(roleLabels) as ProfileMemberRole[]).map((role) => <option key={role} value={role}>{english ? roleLabels[role].en : roleLabels[role].zh}</option>)}
                       </select>
                       {member.role !== 'owner' ? <button className="profile-edit-member__remove" type="button" title={text.removeMember} aria-label={`${text.removeMember}: ${member.name}`} onClick={() => removeMember(member.id)}><Trash2 size={16} strokeWidth={1.9} aria-hidden="true" /></button> : null}
@@ -247,8 +259,8 @@ export function ProfileEditModal({
 
           {error ? <p className="auth-form__error" role="alert">{error}</p> : null}
           <div className="profile-edit-form__actions">
-            <button className="auth-code-button" type="button" onClick={onClose}>{text.cancel}</button>
-            <button className="auth-modal__primary" type="submit"><Save size={17} strokeWidth={1.9} aria-hidden="true" /><span>{text.save}</span></button>
+            <button className="auth-code-button" type="button" onClick={onClose} disabled={isSaving}>{text.cancel}</button>
+            <button className="auth-modal__primary" type="submit" disabled={isSaving}><Save size={17} strokeWidth={1.9} aria-hidden="true" /><span>{text.save}</span></button>
           </div>
         </form>
       </section>

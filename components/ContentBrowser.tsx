@@ -1,9 +1,9 @@
 'use client';
 
-import { ChevronDown, ChevronLeft, ChevronRight, Clock3, Download, Grid2X2, Heart, List, Search } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, Clock3, Download, Grid2X2, Heart, List, LoaderCircle, Search } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
 
 type ContentType = 'mods' | 'theme-pack' | 'modpacks' | 'server';
@@ -43,8 +43,13 @@ const browserCopy = {
     items: '项',
     previousPage: '上一页',
     nextPage: '下一页',
-    emptyTitle: '内容列表准备中',
-    emptyDescription: '筛选和排序控件已就绪，内容接入后会显示在这里。'
+    emptyTitle: '暂无公开项目',
+    emptyDescription: '还没有符合当前筛选条件的项目。',
+    loading: '正在加载内容…',
+    loadError: '内容加载失败，请稍后重试。',
+    retry: '重试',
+    filterPlaceholder: '输入后回车筛选',
+    clearFilter: '清除'
   },
   en: {
     eyebrow: 'MOD DATABASE',
@@ -72,26 +77,29 @@ const browserCopy = {
     items: 'items',
     previousPage: 'Previous page',
     nextPage: 'Next page',
-    emptyTitle: 'Content is being prepared',
-    emptyDescription: 'Filtering and sorting controls are ready. Content will appear here once connected.'
+    emptyTitle: 'No public projects',
+    emptyDescription: 'No projects match the current filters.',
+    loading: 'Loading content…',
+    loadError: 'Content could not be loaded. Try again.',
+    retry: 'Retry',
+    filterPlaceholder: 'Type and press Enter',
+    clearFilter: 'Clear'
   }
 } as const;
 
-type SampleMod = {
+type ApiProject = {
   id: string;
-  image: string;
+  slug: string;
+  type: string;
   name: { zh: string; en: string };
-  author: string;
-  authorType: 'user' | 'organization';
-  authorId: string;
-  description: { zh: string; en: string };
-  tags: { zh: string; en: string }[];
-  downloads: string;
-  followers: string;
-  updated: { zh: string; en: string };
+  summary: { zh: string; en: string };
+  owner: { type: 'user' | 'organization'; id: string; slug?: string; username?: string; name: string } | null;
+  tags: Array<{ slug: string; name: string; nameEn: string }>;
+  stats: { downloads: number; followers: number };
+  updatedAt: string;
 };
 
-const sampleMods: SampleMod[] = [];
+type ApiEnvelope = { data?: ApiProject[]; meta?: { page?: number; pageSize?: number; total?: number; totalPages?: number }; error?: { message?: string } };
 
 function getActiveType(pathname: string, queryType: string | null): ContentType {
   if (pathname === '/modpacks') return 'modpacks';
@@ -181,18 +189,25 @@ export function ContentBrowser() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeType = getActiveType(pathname, searchParams.get('type'));
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(searchParams.get('q') ?? '');
+  const [gameVersion, setGameVersion] = useState(searchParams.get('gameVersion') ?? '');
+  const [category, setCategory] = useState(searchParams.get('category') ?? '');
+  const [environment, setEnvironment] = useState(searchParams.get('environment') ?? '');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [sort, setSort] = useState('relevance');
-  const [perPage, setPerPage] = useState('20');
-  const groups = useMemo(
-    () => [
-      { id: 'version', label: text.gameVersion },
-      { id: 'category', label: text.category },
-      { id: 'environment', label: text.environment }
-    ],
-    [text]
-  );
+  const [sort, setSort] = useState(searchParams.get('sort') ?? 'updated');
+  const [perPage, setPerPage] = useState(searchParams.get('pageSize') ?? '20');
+  const [page, setPage] = useState(Number(searchParams.get('page') ?? '1') || 1);
+  const [projects, setProjects] = useState<ApiProject[]>([]);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [reloadToken, setReloadToken] = useState(0);
+  const groups = [
+    { id: 'version', label: text.gameVersion, value: gameVersion, setValue: setGameVersion, param: 'gameVersion' },
+    { id: 'category', label: text.category, value: category, setValue: setCategory, param: 'category' },
+    { id: 'environment', label: text.environment, value: environment, setValue: setEnvironment, param: 'environment' }
+  ];
   const sortOptions = [
     { value: 'relevance', label: text.sortRelevance },
     { value: 'downloads', label: text.sortDownloads },
@@ -202,12 +217,80 @@ export function ContentBrowser() {
   ];
   const perPageOptions = ['12', '20', '40', '60'].map((value) => ({ value, label: `${value} ${text.items}` }));
 
-  function openCard(modId: string) {
-    router.push(activeType === 'modpacks' ? `/modpack/${modId}` : `/mod/${modId}`);
+  function openCard(project: ApiProject) {
+    router.push(project.type === 'modpack' ? `/modpack/${project.slug}` : `/mod/${project.slug}`);
   }
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setPage(1);
+    updateUrl({ q: query, gameVersion, category, environment, sort, pageSize: perPage, page: '1' });
+  }
+
+  function updateUrl(values: Record<string, string>) {
+    const next = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(values)) {
+      if (value) next.set(key, value); else next.delete(key);
+    }
+    router.replace(`${pathname}${next.toString() ? `?${next.toString()}` : ''}`, { scroll: false });
+  }
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const params = new URLSearchParams({ type: activeType === 'modpacks' ? 'modpack' : activeType, sort: sort === 'relevance' ? 'updated' : sort, page: String(page), pageSize: perPage });
+    if (query.trim()) params.set('q', query.trim());
+    if (gameVersion.trim()) params.set('gameVersion', gameVersion.trim());
+    if (category.trim()) params.set('category', category.trim());
+    if (environment.trim()) params.set('environment', environment.trim());
+    setLoading(true);
+    setLoadError('');
+    fetch(`/api/v1/projects?${params.toString()}`, { cache: 'no-store', signal: controller.signal })
+      .then(async (response) => {
+        const payload = await response.json() as ApiEnvelope;
+        if (!response.ok) throw new Error(payload.error?.message ?? text.loadError);
+        setProjects(payload.data ?? []);
+        setTotal(payload.meta?.total ?? 0);
+        setTotalPages(Math.max(1, payload.meta?.totalPages ?? 1));
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setProjects([]);
+        setLoadError(error instanceof Error ? error.message : text.loadError);
+      })
+      .finally(() => setLoading(false));
+    return () => controller.abort();
+  }, [activeType, category, environment, gameVersion, page, perPage, query, reloadToken, sort, text.loadError]);
+
+  useEffect(() => {
+    setQuery(searchParams.get('q') ?? '');
+    setGameVersion(searchParams.get('gameVersion') ?? '');
+    setCategory(searchParams.get('category') ?? '');
+    setEnvironment(searchParams.get('environment') ?? '');
+    setSort(searchParams.get('sort') ?? 'updated');
+    setPerPage(searchParams.get('pageSize') ?? '20');
+    setPage(Math.max(1, Number(searchParams.get('page') ?? '1') || 1));
+  }, [searchParams]);
+
+  function changeSort(value: string) {
+    setSort(value);
+    setPage(1);
+    updateUrl({ sort: value, page: '1' });
+  }
+
+  function changePerPage(value: string) {
+    setPerPage(value);
+    setPage(1);
+    updateUrl({ pageSize: value, page: '1' });
+  }
+
+  function changePage(nextPage: number) {
+    const bounded = Math.max(1, Math.min(totalPages, nextPage));
+    setPage(bounded);
+    updateUrl({ page: String(bounded) });
+  }
+
+  function formatDate(value: string): string {
+    try { return new Intl.DateTimeFormat(language === 'en' ? 'en' : 'zh-CN', { dateStyle: 'medium' }).format(new Date(value)); } catch { return value; }
   }
 
   return (
@@ -234,6 +317,16 @@ export function ContentBrowser() {
                   <span>{group.label}</span>
                   <ChevronDown size={16} strokeWidth={1.8} aria-hidden="true" />
                 </summary>
+                <form className="content-filter-group__form" onSubmit={(event) => { event.preventDefault(); setPage(1); updateUrl({ [group.param]: group.value, page: '1' }); }}>
+                  <input
+                    type="search"
+                    value={group.value}
+                    onChange={(event) => group.setValue(event.target.value)}
+                    placeholder={text.filterPlaceholder}
+                    aria-label={group.label}
+                  />
+                  {group.value ? <button type="button" title={text.clearFilter} aria-label={`${text.clearFilter}: ${group.label}`} onClick={() => { group.setValue(''); setPage(1); updateUrl({ [group.param]: '', page: '1' }); }}>×</button> : null}
+                </form>
               </details>
             ))}
           </aside>
@@ -251,9 +344,9 @@ export function ContentBrowser() {
             </form>
 
             <div className="content-toolbar">
-              <ContentSelect label={text.sort} value={sort} options={sortOptions} onChange={setSort} />
+              <ContentSelect label={text.sort} value={sort} options={sortOptions} onChange={changeSort} />
 
-              <ContentSelect className="content-select--count" label={text.perPage} value={perPage} options={perPageOptions} onChange={setPerPage} />
+              <ContentSelect className="content-select--count" label={text.perPage} value={perPage} options={perPageOptions} onChange={changePerPage} />
 
               <div className="content-view-toggle" role="group" aria-label={text.viewMode}>
                 <button
@@ -279,21 +372,24 @@ export function ContentBrowser() {
               </div>
 
               <div className="content-pagination" aria-label={language === 'en' ? 'Pagination' : '分页'}>
-                <button className="content-pagination__button" type="button" title={text.previousPage} aria-label={text.previousPage} disabled>
+                <button className="content-pagination__button" type="button" title={text.previousPage} aria-label={text.previousPage} disabled={page <= 1 || loading} onClick={() => changePage(page - 1)}>
                   <ChevronLeft size={17} strokeWidth={1.8} aria-hidden="true" />
                 </button>
-                <span className="content-pagination__current" aria-current="page">1</span>
-                <button className="content-pagination__button" type="button" title={text.nextPage} aria-label={text.nextPage} disabled>
+                <span className="content-pagination__current" aria-current="page">{page}</span>
+                <button className="content-pagination__button" type="button" title={text.nextPage} aria-label={text.nextPage} disabled={page >= totalPages || loading} onClick={() => changePage(page + 1)}>
                   <ChevronRight size={17} strokeWidth={1.8} aria-hidden="true" />
                 </button>
               </div>
             </div>
 
             <div className={`content-cards content-cards--${viewMode}`}>
-              {sampleMods.length > 0 ? sampleMods.map((mod) => {
+              {loading ? <p className="content-browser__empty"><LoaderCircle className="content-browser__spinner" size={20} aria-hidden="true" />{text.loading}</p> : loadError ? <div className="content-browser__empty"><AlertCircle size={21} aria-hidden="true" /><p>{loadError}</p><button className="auth-code-button" type="button" onClick={() => setReloadToken((value) => value + 1)}>{text.retry}</button></div> : projects.length > 0 ? projects.map((mod) => {
                 const name = language === 'en' ? mod.name.en : mod.name.zh;
-                const description = language === 'en' ? mod.description.en : mod.description.zh;
-                const updated = language === 'en' ? mod.updated.en : mod.updated.zh;
+                const description = language === 'en' ? mod.summary.en : mod.summary.zh;
+                const updated = formatDate(mod.updatedAt);
+                const ownerType = mod.owner?.type ?? 'user';
+                const ownerId = ownerType === 'organization' ? mod.owner?.slug ?? mod.owner?.id ?? '' : mod.owner?.username ?? mod.owner?.id ?? '';
+                const ownerName = mod.owner?.name ?? (language === 'en' ? 'Unknown creator' : '未知作者');
 
                 return (
                   <article
@@ -302,32 +398,32 @@ export function ContentBrowser() {
                     role="link"
                     tabIndex={0}
                     aria-label={name}
-                    onClick={() => openCard(mod.id)}
+                    onClick={() => openCard(mod)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
-                        openCard(mod.id);
+                        openCard(mod);
                       }
                     }}
                   >
                     <div className="content-card__media">
-                      <img src={mod.image} alt={name} loading="lazy" />
+                      <img src="/brand/vintage-story-game-logo.png" alt={name} loading="lazy" />
                     </div>
 
                     <div className="content-card__body">
                       <div className="content-card__summary">
                         <div className="content-card__icon" aria-hidden="true">
-                          <img src={mod.image} alt="" loading="lazy" />
+                          <img src="/brand/vintage-story-game-logo.png" alt="" loading="lazy" />
                         </div>
                         <div className="content-card__copy">
                           <h2 className="content-card__title">
                             <span>{name}</span>{' '}
                             <Link
                               className="content-card__author"
-                              href={`/${mod.authorType === 'user' ? 'user' : 'organization'}/${mod.authorId}`}
+                              href={`/${ownerType === 'user' ? 'user' : 'organization'}/${encodeURIComponent(ownerId)}`}
                               onClick={(event) => event.stopPropagation()}
                             >
-                              {text.cardBy} {mod.author}
+                              {text.cardBy} {ownerName}
                             </Link>
                           </h2>
                           <p className="content-card__description">{description}</p>
@@ -336,7 +432,7 @@ export function ContentBrowser() {
 
                       <ul className="content-card__tags" aria-label={language === 'en' ? 'Tags' : '标签'}>
                         {mod.tags.map((tag) => (
-                          <li key={tag.en}>{language === 'en' ? tag.en : tag.zh}</li>
+                          <li key={tag.slug}>{language === 'en' ? tag.nameEn : tag.name}</li>
                         ))}
                       </ul>
                     </div>
@@ -346,13 +442,13 @@ export function ContentBrowser() {
                         <dt aria-label={text.cardDownloads}>
                           <Download size={15} strokeWidth={1.9} aria-hidden="true" />
                         </dt>
-                        <dd>{mod.downloads}</dd>
+                        <dd>{mod.stats.downloads.toLocaleString()}</dd>
                       </div>
                       <div>
                         <dt aria-label={text.cardFollowers}>
                           <Heart size={15} strokeWidth={1.9} aria-hidden="true" />
                         </dt>
-                        <dd>{mod.followers}</dd>
+                        <dd>{mod.stats.followers.toLocaleString()}</dd>
                       </div>
                       <div>
                         <dt aria-label={text.cardUpdated}>
@@ -363,7 +459,7 @@ export function ContentBrowser() {
                     </dl>
                   </article>
                 );
-              }) : <p className="content-browser__empty">{text.emptyDescription}</p>}
+              }) : <div className="content-browser__empty"><strong>{text.emptyTitle}</strong><p>{text.emptyDescription}</p></div>}
             </div>
           </section>
         </div>

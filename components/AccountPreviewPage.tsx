@@ -2,10 +2,12 @@
 
 import { ChevronLeft, ChevronRight, Download, FolderKanban, Grid2X2, Heart, List, Pencil } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ProfileEditModal, type ProfileEditValues, type ProfileMember } from '@/components/ProfileEditModal';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
 import type { SessionAccountSummary } from '@/lib/auth-server';
+import { requestConfirmation } from '@/lib/client-confirmation';
+import { ensureCsrfToken } from '@/lib/client-confirmation';
 
 type AccountPreviewPageProps = {
   kind: 'user' | 'organization';
@@ -21,7 +23,36 @@ type ProfileProject = {
   name: { zh: string; en: string };
   description: { zh: string; en: string };
   tags: Array<{ zh: string; en: string }>;
+  summary?: { zh: string; en: string };
+  slug?: string;
+  stats?: { downloads: number; followers: number };
 };
+
+type ProfileResponse = {
+  id: string;
+  username?: string;
+  displayName: string;
+  name?: string;
+  bio?: string;
+  description?: string;
+  avatarUrl?: string | null;
+  projects: Array<Record<string, unknown>>;
+  projectStats?: { projects: number; downloads: number; followers: number };
+  members?: Array<{ id: string; username: string; name: string; role: string; avatarUrl?: string | null }>;
+  createdAt?: string;
+};
+
+type ProfileEnvelope = {
+  data?: ProfileResponse;
+  meta?: { page?: number; pageSize?: number; total?: number; totalPages?: number };
+  error?: { message?: string };
+};
+
+const profilePageSize = 20;
+
+function apiProjectType(type: ProjectType): string {
+  return type === 'mods' ? 'mod' : type === 'modpacks' ? 'modpack' : type;
+}
 
 const memberRoleNames = {
   owner: { zh: '所有者', en: 'Owner' },
@@ -33,7 +64,7 @@ const memberRoleNames = {
 
 const copy = {
   'zh-CN': {
-    projectsTitle: '公开项目',
+    projectsTitle: '项目',
     organization: '组织',
     members: '组织成员',
     projectCount: '项目数量',
@@ -50,12 +81,14 @@ const copy = {
     previousPage: '上一页',
     nextPage: '下一页',
     pagination: '分页',
-    noProjects: '该分类暂无公开项目。',
-    placeholder: '相关内容接入后将在这里显示。',
+    noProjects: '该分类暂无项目。',
+    loadingProjects: '正在加载项目…',
+    retry: '重试',
+    noDescription: '暂无公开资料介绍。',
     edit: '编辑'
   },
   en: {
-    projectsTitle: 'Public projects',
+    projectsTitle: 'Projects',
     organization: 'Organization',
     members: 'Organization members',
     projectCount: 'Projects',
@@ -72,8 +105,10 @@ const copy = {
     previousPage: 'Previous page',
     nextPage: 'Next page',
     pagination: 'Pagination',
-    noProjects: 'No public projects in this category yet.',
-    placeholder: 'Related content will appear here when connected.',
+    noProjects: 'No projects in this category yet.',
+    loadingProjects: 'Loading projects…',
+    retry: 'Retry',
+    noDescription: 'No public profile description.',
     edit: 'Edit'
   }
 } as const;
@@ -95,6 +130,12 @@ export function AccountPreviewPage({ kind, id, sessionAccount = null }: AccountP
   const text = copy[language];
   const [projectType, setProjectType] = useState<ProjectType>('mods');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [profile, setProfile] = useState<ProfileResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [reloadToken, setReloadToken] = useState(0);
   const name = displayName(id);
   const projectTabs: Array<{ id: ProjectType; label: string }> = [
     { id: 'mods', label: text.mods },
@@ -102,25 +143,108 @@ export function AccountPreviewPage({ kind, id, sessionAccount = null }: AccountP
     { id: 'modpacks', label: text.modpacks },
     { id: 'server', label: text.serverTweaks }
   ];
-  const visibleProjects: ProfileProject[] = [];
-  const projectCount = 0;
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setLoadError('');
+    const baseEndpoint = kind === 'user' ? `/api/v1/users/${encodeURIComponent(id)}` : `/api/v1/organizations/${encodeURIComponent(id)}`;
+    const query = new URLSearchParams({ type: apiProjectType(projectType), page: String(page), pageSize: String(profilePageSize) });
+    const endpoint = `${baseEndpoint}?${query.toString()}`;
+    fetch(endpoint, { cache: 'no-store', signal: controller.signal })
+      .then(async (response) => {
+        const payload = await response.json() as ProfileEnvelope;
+        if (response.status === 404) throw new Error(language === 'en' ? 'Profile not found.' : '资料不存在。');
+        if (!response.ok || !payload.data) throw new Error(payload.error?.message ?? (language === 'en' ? 'Unable to load profile.' : '资料加载失败。'));
+        setProfile(payload.data);
+        const nextTotalPages = Math.max(1, payload.meta?.totalPages ?? 1);
+        setTotalPages(nextTotalPages);
+        if (page > nextTotalPages) setPage(nextTotalPages);
+      })
+      .catch((error: unknown) => { if (error instanceof DOMException && error.name === 'AbortError') return; setLoadError(error instanceof Error ? error.message : ''); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [id, kind, language, page, projectType, reloadToken]);
+
+  const profileProjects: ProfileProject[] = (profile?.projects ?? []).map((project) => {
+    const item = project as { id: string; slug?: string; type?: string; name?: { zh: string; en: string }; summary?: { zh: string; en: string }; description?: { zh: string; en: string }; tags?: Array<{ name: string; nameEn: string }>; stats?: { downloads: number; followers: number } };
+    const rawType = item.type ?? 'mod';
+    const normalizedType = rawType === 'modpack' ? 'modpacks' : rawType === 'theme_pack' || rawType === 'theme-pack' ? 'theme-pack' : rawType === 'server' ? 'server' : 'mods';
+    return { id: item.slug ?? item.id, slug: item.slug, type: normalizedType as ProjectType, name: item.name ?? { zh: '', en: '' }, description: item.summary ?? item.description ?? { zh: '', en: '' }, tags: (item.tags ?? []).map((tag) => ({ zh: tag.name, en: tag.nameEn })), stats: item.stats };
+  });
+  const visibleProjects = profileProjects.filter((project) => project.type === projectType);
+  const projectCount = Number(profile?.projectStats?.projects ?? profileProjects.length);
+  const totalDownloads = Number(profile?.projectStats?.downloads ?? profileProjects.reduce((sum, project) => sum + Number((project as ProfileProject & { stats?: { downloads?: number } }).stats?.downloads ?? 0), 0));
+  const totalFollowers = Number(profile?.projectStats?.followers ?? profileProjects.reduce((sum, project) => sum + Number((project as ProfileProject & { stats?: { followers?: number } }).stats?.followers ?? 0), 0));
   const canEditProfile = kind === 'user'
     ? profileId(sessionAccount?.username ?? '') === profileId(id)
-    : Boolean(sessionAccount?.ownedOrganizations.some((organizationName) => profileId(organizationName) === profileId(id)));
-  const initialName = kind === 'user' && canEditProfile ? sessionAccount?.displayName ?? name : name;
-  const [profileName, setProfileName] = useState(initialName);
-  const [profileAvatarUrl, setProfileAvatarUrl] = useState(kind === 'user' && canEditProfile ? sessionAccount?.avatarUrl : undefined);
-  const [profileDescription, setProfileDescription] = useState('');
-  const [organizationMembers, setOrganizationMembers] = useState<ProfileMember[]>([]);
+    : Boolean(sessionAccount?.organizationDetails?.some((organization) => organization.slug === id && ['owner', 'admin'].includes(organization.role)) || sessionAccount?.ownedOrganizations.some((organizationName) => profileId(organizationName) === profileId(id)));
+  const profileName = profile?.displayName ?? profile?.name ?? (kind === 'user' && canEditProfile ? sessionAccount?.displayName : undefined) ?? name;
+  const profileAvatarUrl = profile?.avatarUrl ?? (kind === 'user' && canEditProfile ? sessionAccount?.avatarUrl : undefined);
+  const profileDescription = profile?.bio ?? profile?.description ?? '';
+  const organizationMembers: ProfileMember[] = (profile?.members ?? []).map((member) => ({ id: member.id, username: member.username, name: member.name, role: member.role as ProfileMember['role'], avatarUrl: member.avatarUrl ?? undefined }));
   const [editOpen, setEditOpen] = useState(false);
 
-  function saveProfile(values: ProfileEditValues) {
-    setProfileName(values.name);
-    setProfileAvatarUrl(values.avatarUrl);
-    setProfileDescription(values.description);
-    setOrganizationMembers(values.members);
+  async function saveProfile(values: ProfileEditValues) {
+    const csrf = await ensureCsrfToken();
+    const headers = { 'Content-Type': 'application/json', ...(csrf ? { 'x-csrf-token': decodeURIComponent(csrf) } : {}) };
+    const membershipChanges = kind === 'organization' && (values.members.some((member) => { const old = organizationMembers.find((item) => item.id === member.id); return old && old.role !== member.role && member.role !== 'owner'; }) || organizationMembers.some((member) => member.role !== 'owner' && !values.members.some((next) => next.id === member.id)));
+    if (membershipChanges && !window.confirm(language === 'en' ? 'Confirm organization membership changes?' : '确认修改组织成员和角色？')) return;
+    const endpoint = kind === 'user' ? '/api/v1/me/profile' : `/api/v1/organizations/${encodeURIComponent(id)}`;
+    const response = await fetch(endpoint, { method: 'PATCH', headers, body: JSON.stringify(kind === 'user' ? { displayName: values.name, bio: values.description } : { name: values.name, description: values.description }) });
+    const payload = await response.json().catch(() => ({})) as { data?: ProfileResponse; error?: { message?: string } };
+    if (!response.ok) throw new Error(payload.error?.message ?? (language === 'en' ? 'Save failed.' : '保存失败。'));
+    if (kind === 'organization') {
+      const previous = new Map(organizationMembers.map((member) => [member.id, member]));
+      const next = new Map(values.members.map((member) => [member.id, member]));
+      for (const member of values.members) {
+        const old = previous.get(member.id);
+        if (!old) {
+          const invitation = await fetch(`/api/v1/organizations/${encodeURIComponent(id)}/members`, { method: 'POST', headers, body: JSON.stringify({ username: member.username ?? member.id, role: member.role }) });
+          if (!invitation.ok) { const detail = await invitation.json().catch(() => ({})) as { error?: { message?: string } }; throw new Error(detail.error?.message ?? (language === 'en' ? 'Member invitation failed.' : '成员邀请失败。')); }
+        } else if (old.role !== member.role && member.role !== 'owner') {
+          const confirmation = await requestConfirmation('organization.member.role.update', 'organization', `${profile?.id ?? id}:${member.id}`);
+          const roleResponse = await fetch(`/api/v1/organizations/${encodeURIComponent(id)}/members`, { method: 'PATCH', headers: { ...headers, ...confirmation }, body: JSON.stringify({ username: member.username ?? member.id, role: member.role }) });
+          if (!roleResponse.ok) { const detail = await roleResponse.json().catch(() => ({})) as { error?: { message?: string } }; throw new Error(detail.error?.message ?? (language === 'en' ? 'Role update failed.' : '角色更新失败。')); }
+        }
+      }
+      for (const member of organizationMembers) {
+        if (!next.has(member.id) && member.role !== 'owner') {
+          const confirmation = await requestConfirmation('organization.member.remove', 'organization', `${profile?.id ?? id}:${member.id}`);
+          const removeResponse = await fetch(`/api/v1/organizations/${encodeURIComponent(id)}/members?username=${encodeURIComponent(member.username ?? member.id)}`, { method: 'DELETE', headers: { ...headers, ...confirmation } });
+          if (!removeResponse.ok) { const detail = await removeResponse.json().catch(() => ({})) as { error?: { message?: string } }; throw new Error(detail.error?.message ?? (language === 'en' ? 'Member removal failed.' : '成员移除失败。')); }
+        }
+      }
+    }
+    let nextAvatar = profile?.avatarUrl ?? undefined;
+    if (values.avatarRemoved && !values.avatarFile) {
+      const avatarEndpoint = kind === 'user' ? '/api/v1/me/avatar' : `/api/v1/organizations/${encodeURIComponent(id)}/avatar`;
+      const removeResponse = await fetch(avatarEndpoint, { method: 'DELETE', headers: csrf ? { 'x-csrf-token': decodeURIComponent(csrf) } : undefined });
+      if (!removeResponse.ok) throw new Error(language === 'en' ? 'Avatar removal failed.' : '头像移除失败。');
+      nextAvatar = undefined;
+    } else if (values.avatarFile) {
+      const form = new FormData();
+      form.set('file', values.avatarFile);
+      const avatarEndpoint = kind === 'user' ? '/api/v1/me/avatar' : `/api/v1/organizations/${encodeURIComponent(id)}/avatar`;
+      const avatarResponse = await fetch(avatarEndpoint, { method: 'POST', headers: csrf ? { 'x-csrf-token': decodeURIComponent(csrf) } : undefined, body: form });
+      const avatarPayload = await avatarResponse.json().catch(() => ({})) as { data?: { avatarUrl?: string }; error?: { message?: string } };
+      if (!avatarResponse.ok) throw new Error(avatarPayload.error?.message ?? (language === 'en' ? 'Avatar upload failed.' : '头像上传失败。'));
+      nextAvatar = avatarPayload.data?.avatarUrl ?? nextAvatar;
+    }
+    if (profile) setProfile({ ...profile, displayName: values.name, name: values.name, bio: values.description, description: values.description, avatarUrl: nextAvatar });
     setEditOpen(false);
   }
+
+  function changeProjectType(nextType: ProjectType) {
+    setProjectType(nextType);
+    setPage(1);
+  }
+
+  function changePage(nextPage: number) {
+    setPage(Math.max(1, Math.min(totalPages, nextPage)));
+  }
+
+  if (!profile && loading) return <section className="profile-page"><div className="profile-page__inner"><p className="profile-projects__empty">{language === 'en' ? 'Loading profile…' : '正在加载资料…'}</p></div></section>;
+  if (!profile && loadError) return <section className="profile-page"><div className="profile-page__inner"><h1>{language === 'en' ? 'Profile unavailable' : '资料不可用'}</h1><p className="profile-projects__empty">{loadError}</p></div></section>;
 
   return (
     <section className="profile-page" aria-labelledby="profile-title">
@@ -131,7 +255,7 @@ export function AccountPreviewPage({ kind, id, sessionAccount = null }: AccountP
           </div>
           <div className="profile-hero__copy">
             <h1 id="profile-title">{profileName}</h1>
-            <p>{profileDescription || text.placeholder}</p>
+            <p>{profileDescription || text.noDescription}</p>
             <dl className="profile-project-stats">
               <div>
                 <dt aria-label={text.projectCount}><FolderKanban size={16} strokeWidth={1.9} aria-hidden="true" /></dt>
@@ -139,11 +263,11 @@ export function AccountPreviewPage({ kind, id, sessionAccount = null }: AccountP
               </div>
               <div>
                 <dt aria-label={text.downloads}><Download size={16} strokeWidth={1.9} aria-hidden="true" /></dt>
-                <dd>{projectCount > 0 ? '128.4K' : '0'}</dd>
+                <dd>{totalDownloads.toLocaleString()}</dd>
               </div>
               <div>
                 <dt aria-label={text.followers}><Heart size={16} strokeWidth={1.9} aria-hidden="true" /></dt>
-                <dd>{projectCount > 0 ? '2.8K' : '0'}</dd>
+                <dd>{totalFollowers.toLocaleString()}</dd>
               </div>
             </dl>
           </div>
@@ -165,7 +289,7 @@ export function AccountPreviewPage({ kind, id, sessionAccount = null }: AccountP
                   key={tab.id}
                   type="button"
                   aria-pressed={projectType === tab.id}
-                  onClick={() => setProjectType(tab.id)}
+                  onClick={() => changeProjectType(tab.id)}
                 >
                   {tab.label}
                 </button>
@@ -196,18 +320,18 @@ export function AccountPreviewPage({ kind, id, sessionAccount = null }: AccountP
             </div>
 
             <div className="content-pagination" aria-label={text.pagination}>
-              <button className="content-pagination__button" type="button" title={text.previousPage} aria-label={text.previousPage} disabled>
+              <button className="content-pagination__button" type="button" title={text.previousPage} aria-label={text.previousPage} disabled={page <= 1 || loading} onClick={() => changePage(page - 1)}>
                 <ChevronLeft size={17} strokeWidth={1.8} aria-hidden="true" />
               </button>
-              <span className="content-pagination__current" aria-current="page">1</span>
-              <button className="content-pagination__button" type="button" title={text.nextPage} aria-label={text.nextPage} disabled>
+              <span className="content-pagination__current" aria-current="page">{page}</span>
+              <button className="content-pagination__button" type="button" title={text.nextPage} aria-label={text.nextPage} disabled={page >= totalPages || loading} onClick={() => changePage(page + 1)}>
                 <ChevronRight size={17} strokeWidth={1.8} aria-hidden="true" />
               </button>
             </div>
           </div>
 
             <div className={`content-cards content-cards--${viewMode} profile-projects__content`} data-project-type={projectType} aria-label={text.projectsTitle}>
-              {visibleProjects.length > 0 ? visibleProjects.map((project) => {
+              {loading ? <p className="profile-projects__empty">{text.loadingProjects}</p> : loadError ? <p className="profile-projects__empty">{loadError} <button className="auth-code-button" type="button" onClick={() => setReloadToken((value) => value + 1)}>{text.retry}</button></p> : visibleProjects.length > 0 ? visibleProjects.map((project) => {
                 const projectName = language === 'en' ? project.name.en : project.name.zh;
                 const projectDescription = language === 'en' ? project.description.en : project.description.zh;
                 return (
@@ -247,7 +371,7 @@ export function AccountPreviewPage({ kind, id, sessionAccount = null }: AccountP
                 {organizationMembers.length > 0 ? (
                   <div className="preview-owner-card__member-list">
                     {organizationMembers.map((member) => (
-                      <Link className="preview-owner-card__member" href={`/user/${member.id}`} key={member.id}>
+                      <Link className="preview-owner-card__member" href={`/user/${encodeURIComponent(member.username ?? member.id)}`} key={member.id}>
                         <span className="preview-owner-card__member-avatar">
                           {member.avatarUrl ? <img src={member.avatarUrl} alt="" /> : <img src="/brand/logo-icon-rounded.svg" alt="" />}
                         </span>
@@ -258,7 +382,7 @@ export function AccountPreviewPage({ kind, id, sessionAccount = null }: AccountP
                       </Link>
                     ))}
                   </div>
-                ) : <p>{text.placeholder}</p>}
+                ) : <p>{text.noProjects}</p>}
               </div>
             </aside>
           ) : null}

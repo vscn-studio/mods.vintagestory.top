@@ -1,8 +1,10 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { cookies } from 'next/headers';
 import type { NextRequest, NextResponse } from 'next/server';
+import type { Prisma, SiteRole as PrismaSiteRole } from '@prisma/client';
+import { getDb, databaseConfigured } from '@/lib/db';
 
 export type AuthProvider = 'official' | 'community';
 
@@ -27,16 +29,24 @@ export type ModAccount = PendingIdentity & {
   linkedIdentities?: PendingIdentity[];
   organizations?: string[];
   ownedOrganizations?: string[];
+  organizationDetails?: Array<{ id: string; slug: string; name: string; role: string }>;
+  status?: 'ACTIVE' | 'SUSPENDED' | 'BANNED';
+  siteRoles?: string[];
 };
 
 export type SessionAccountSummary = {
+  id: string;
   displayName: string;
   username: string;
   provider: AuthProvider;
   avatarUrl?: string;
   isAdmin?: boolean;
+  hasOfficialIdentity: boolean;
+  siteRoles: string[];
   organizations: string[];
   ownedOrganizations: string[];
+  organizationDetails?: Array<{ id: string; slug: string; name: string; role: string }>;
+  status?: 'ACTIVE' | 'SUSPENDED' | 'BANNED';
 };
 
 export type IdentityAuthenticationResult =
@@ -128,6 +138,10 @@ export function getAccountAvatarUrl(account: ModAccount): string | undefined {
   return accountIdentities(account).find((identity) => identity.provider === 'community')?.avatarUrl;
 }
 
+export function hasOfficialIdentity(account: ModAccount): boolean {
+  return accountIdentities(account).some((identity) => identity.provider === 'official');
+}
+
 const PENDING_COOKIE = 'mod_pending_identity';
 const SESSION_COOKIE = 'mod_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
@@ -182,6 +196,25 @@ function seal<T>(value: T): string {
   return `${payload}.${sign(payload)}`;
 }
 
+function encrypt<T>(value: T): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', createHash('sha256').update(secret()).digest(), iv);
+  const ciphertext = Buffer.concat([cipher.update(JSON.stringify(value), 'utf8'), cipher.final()]);
+  return `${iv.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}.${ciphertext.toString('base64url')}`;
+}
+
+function decrypt<T>(value: string): T | null {
+  const [ivRaw, tagRaw, ciphertextRaw] = value.split('.');
+  if (!ivRaw || !tagRaw || !ciphertextRaw) return null;
+  try {
+    const decipher = createDecipheriv('aes-256-gcm', createHash('sha256').update(secret()).digest(), Buffer.from(ivRaw, 'base64url'));
+    decipher.setAuthTag(Buffer.from(tagRaw, 'base64url'));
+    return JSON.parse(Buffer.concat([decipher.update(Buffer.from(ciphertextRaw, 'base64url')), decipher.final()]).toString('utf8')) as T;
+  } catch {
+    return null;
+  }
+}
+
 function unseal<T>(value: string): T | null {
   const [payload, signature] = value.split('.');
   if (!payload || !signature) return null;
@@ -206,13 +239,13 @@ function cookieOptions(maxAge: number) {
 }
 
 export function setPendingIdentity(response: NextResponse, identity: PendingIdentity): void {
-  response.cookies.set(PENDING_COOKIE, seal(identity), cookieOptions(10 * 60));
+  response.cookies.set(PENDING_COOKIE, encrypt(identity), cookieOptions(10 * 60));
 }
 
 export function getPendingIdentity(request: NextRequest): PendingIdentity | null {
   const raw = request.cookies.get(PENDING_COOKIE)?.value;
   if (!raw) return null;
-  const identity = unseal<PendingIdentity>(raw);
+  const identity = decrypt<PendingIdentity>(raw) ?? unseal<PendingIdentity>(raw);
   if (!identity || !identity.subject || !identity.displayName) return null;
   return identity;
 }
@@ -223,6 +256,44 @@ export function clearPendingIdentity(response: NextResponse): void {
 
 export function setAccountSession(response: NextResponse, accountId: string): void {
   response.cookies.set(SESSION_COOKIE, seal({ accountId, issuedAt: Date.now() }), cookieOptions(SESSION_TTL_SECONDS));
+}
+
+export async function createAccountSession(
+  response: NextResponse,
+  accountId: string,
+  request?: Request
+): Promise<void> {
+  const db = getDb();
+  if (!db) {
+    setAccountSession(response, accountId);
+    return;
+  }
+  const rawToken = randomBytes(32).toString('base64url');
+  const tokenHash = createHmac('sha256', secret()).update(`session:${rawToken}`).digest('hex');
+  const session = await db.session.create({
+    data: {
+      accountId,
+      tokenHash,
+      expiresAt: new Date(Date.now() + SESSION_TTL_SECONDS * 1000),
+      userAgent: request?.headers.get('user-agent')?.slice(0, 512),
+      ipAddress: request?.headers.get('x-forwarded-for')?.split(',')[0]?.trim().slice(0, 64)
+    }
+  });
+  response.cookies.set(SESSION_COOKIE, seal({ sessionId: session.id, token: rawToken }), cookieOptions(SESSION_TTL_SECONDS));
+}
+
+export async function revokeAccountSession(request: NextRequest): Promise<void> {
+  const raw = request.cookies.get(SESSION_COOKIE)?.value;
+  const session = raw ? unseal<{ sessionId?: string }>(raw) : null;
+  const db = getDb();
+  if (!db || !session?.sessionId) return;
+  await db.session.updateMany({ where: { id: session.sessionId, revokedAt: null }, data: { revokedAt: new Date() } }).catch(() => undefined);
+}
+
+export function getSessionRecordId(request: NextRequest): string | null {
+  const raw = request.cookies.get(SESSION_COOKIE)?.value;
+  const session = raw ? unseal<{ sessionId?: string }>(raw) : null;
+  return session?.sessionId ?? null;
 }
 
 export function clearAccountSession(response: NextResponse): void {
@@ -249,6 +320,10 @@ function activationDataFile(): string {
 
 function activationCodeHash(code: string): string {
   return createHmac('sha256', secret()).update(`activation:${code}`).digest('hex');
+}
+
+function activationProvider(provider: AuthProvider): 'OFFICIAL' | 'COMMUNITY' {
+  return provider === 'official' ? 'OFFICIAL' : 'COMMUNITY';
 }
 
 function hashesMatch(expectedHash: string, actualHash: string): boolean {
@@ -282,11 +357,85 @@ async function readActivationChallenges(): Promise<ActivationChallenge[]> {
   }
 }
 
+async function issueActivationChallengeInDatabase(
+  db: NonNullable<ReturnType<typeof getDb>>,
+  identity: PendingIdentity,
+  bindEmail: string,
+  code: string
+): Promise<{ ok: true; challengeId: string; expiresAt: number } | { ok: false; retryAfterSeconds: number }> {
+  const now = new Date();
+  const provider = activationProvider(identity.provider);
+  const recent = await db.activationChallenge.findFirst({ where: { provider, subject: identity.subject, bindEmail } });
+  if (recent && recent.expiresAt > now && recent.attempts < ACTIVATION_MAX_ATTEMPTS && recent.createdAt.getTime() + ACTIVATION_RESEND_COOLDOWN_MS > now.getTime()) {
+    return { ok: false, retryAfterSeconds: Math.max(1, Math.ceil((recent.createdAt.getTime() + ACTIVATION_RESEND_COOLDOWN_MS - now.getTime()) / 1000)) };
+  }
+  const challengeId = `act_${randomBytes(16).toString('hex')}`;
+  const expiresAt = new Date(now.getTime() + ACTIVATION_CODE_TTL_MS);
+  try {
+    await db.$transaction(async (tx) => {
+      await tx.activationChallenge.deleteMany({ where: { OR: [{ provider, subject: identity.subject }, { expiresAt: { lte: now } }] } });
+      await tx.activationChallenge.create({ data: { id: challengeId, provider, subject: identity.subject, bindEmail, codeHash: activationCodeHash(code), expiresAt, createdAt: now } });
+    });
+  } catch (error) {
+    // A concurrent request may have won the unique challenge slot. Re-read it
+    // and expose the same cooldown response instead of a generic 500.
+    const concurrent = await db.activationChallenge.findFirst({ where: { provider, subject: identity.subject, bindEmail } }).catch(() => null);
+    if (concurrent && concurrent.expiresAt > now) return { ok: false, retryAfterSeconds: Math.max(1, Math.ceil((concurrent.createdAt.getTime() + ACTIVATION_RESEND_COOLDOWN_MS - now.getTime()) / 1000)) };
+    throw error;
+  }
+  return { ok: true, challengeId, expiresAt: expiresAt.getTime() };
+}
+
+async function discardActivationChallengeInDatabase(db: NonNullable<ReturnType<typeof getDb>>, challengeId: string): Promise<void> {
+  await db.activationChallenge.deleteMany({ where: { id: challengeId } });
+}
+
+async function consumeActivationChallengeInDatabase(
+  db: NonNullable<ReturnType<typeof getDb>>,
+  identity: PendingIdentity,
+  bindEmail: string,
+  code: string
+): Promise<'ok' | 'invalid' | 'expired' | 'locked'> {
+  const provider = activationProvider(identity.provider);
+  return db.$transaction(async (tx) => {
+    const found = await tx.activationChallenge.findFirst({ where: { provider, subject: identity.subject, bindEmail } });
+    if (!found) return 'invalid';
+    await tx.$queryRaw`SELECT "id" FROM "ActivationChallenge" WHERE "id" = ${found.id} FOR UPDATE`;
+    const challenge = await tx.activationChallenge.findUnique({ where: { id: found.id } });
+    if (!challenge) return 'invalid';
+    const now = new Date();
+    if (challenge.expiresAt <= now) {
+      await tx.activationChallenge.delete({ where: { id: challenge.id } });
+      return 'expired';
+    }
+    if (challenge.attempts >= ACTIVATION_MAX_ATTEMPTS) {
+      await tx.activationChallenge.delete({ where: { id: challenge.id } });
+      return 'locked';
+    }
+    if (!hashesMatch(challenge.codeHash, activationCodeHash(code))) {
+      const attempts = challenge.attempts + 1;
+      if (attempts >= ACTIVATION_MAX_ATTEMPTS) {
+        await tx.activationChallenge.delete({ where: { id: challenge.id } });
+        return 'locked';
+      }
+      await tx.activationChallenge.update({ where: { id: challenge.id }, data: { attempts } });
+      return 'invalid';
+    }
+    await tx.activationChallenge.delete({ where: { id: challenge.id } });
+    return 'ok';
+  });
+}
+
 export async function issueActivationChallenge(
   identity: PendingIdentity,
   bindEmail: string,
   code: string
 ): Promise<{ ok: true; challengeId: string; expiresAt: number } | { ok: false; retryAfterSeconds: number }> {
+  if (databaseConfigured()) {
+    const db = getDb();
+    if (!db) throw new Error('Database is unavailable');
+    return issueActivationChallengeInDatabase(db, identity, bindEmail, code);
+  }
   return withActivationLock(async () => {
     const now = Date.now();
     let challenges = (await readActivationChallenges()).filter(
@@ -328,6 +477,12 @@ export async function issueActivationChallenge(
 }
 
 export async function discardActivationChallenge(challengeId: string): Promise<void> {
+  if (databaseConfigured()) {
+    const db = getDb();
+    if (!db) throw new Error('Database is unavailable');
+    await discardActivationChallengeInDatabase(db, challengeId);
+    return;
+  }
   await withActivationLock(async () => {
     const challenges = await readActivationChallenges();
     const remaining = challenges.filter((challenge) => challenge.id !== challengeId);
@@ -340,6 +495,11 @@ export async function consumeActivationChallenge(
   bindEmail: string,
   code: string
 ): Promise<'ok' | 'invalid' | 'expired' | 'locked'> {
+  if (databaseConfigured()) {
+    const db = getDb();
+    if (!db) throw new Error('Database is unavailable');
+    return consumeActivationChallengeInDatabase(db, identity, bindEmail, code);
+  }
   return withActivationLock(async () => {
     const now = Date.now();
     const challenges = await readActivationChallenges();
@@ -398,12 +558,121 @@ async function readAccounts(): Promise<ModAccount[]> {
   }
 }
 
+type DbAccountRecord = Prisma.AccountGetPayload<{
+  include: {
+    identities: true;
+    siteRoles: true;
+    organizationMemberships: { include: { organization: true } };
+    ownedOrganizations: true;
+  };
+}>;
+
+function dbIdentityToPending(identity: DbAccountRecord['identities'][number]): PendingIdentity {
+  return {
+    provider: identity.provider === 'OFFICIAL' ? 'official' : 'community',
+    subject: identity.subject,
+    displayName: identity.displayName,
+    providerEmail: identity.providerEmail ?? undefined,
+    providerEmailVerified: identity.providerEmailVerified,
+    username: identity.username ?? undefined,
+    playerName: identity.playerName ?? undefined,
+    playerUid: identity.playerUid ?? undefined,
+    avatarUrl: identity.avatarUrl ?? undefined,
+    groups: normalizeGroups(identity.groups)
+  };
+}
+
+function dbAccountToModAccount(account: DbAccountRecord): ModAccount {
+  const identities = account.identities.map(dbIdentityToPending);
+  const preferred = identities.find((identity) => identity.provider === 'community') ?? identities[0];
+  const primary = preferred ?? {
+    provider: 'community' as const,
+    subject: `account:${account.id}`,
+    displayName: account.displayName,
+    username: account.username
+  };
+  const ownedIds = new Set(account.ownedOrganizations.map((organization) => organization.id));
+  const membershipDetails = account.organizationMemberships.map((membership) => ({
+    id: membership.organization.id,
+    slug: membership.organization.slug,
+    name: membership.organization.name,
+    role: ownedIds.has(membership.organization.id) ? 'owner' : membership.role.toLowerCase()
+  }));
+  const ownerDetails = account.ownedOrganizations
+    .filter((organization) => !membershipDetails.some((membership) => membership.id === organization.id))
+    .map((organization) => ({ id: organization.id, slug: organization.slug, name: organization.name, role: 'owner' }));
+  const organizationDetails = [...membershipDetails, ...ownerDetails];
+  return {
+    ...primary,
+    id: account.id,
+    bindEmail: account.bindEmail,
+    createdAt: account.createdAt.toISOString(),
+    lastLoginAt: (account.lastLoginAt ?? account.updatedAt).toISOString(),
+    avatarUrl: account.avatarUrl ?? primary.avatarUrl,
+    linkedIdentities: identities.filter((identity) => identity !== preferred),
+    organizations: [...new Set([...account.organizationMemberships.map((membership) => membership.organization.slug), ...account.ownedOrganizations.map((organization) => organization.slug)])],
+    ownedOrganizations: account.ownedOrganizations.map((organization) => organization.slug),
+    organizationDetails,
+    status: account.status,
+    siteRoles: account.siteRoles.map((assignment) => assignment.role)
+  };
+}
+
+async function findDbAccountById(accountId: string): Promise<ModAccount | null> {
+  const db = getDb();
+  if (!db) return null;
+  try {
+    const account = await db.account.findUnique({
+      where: { id: accountId },
+      include: {
+        identities: true,
+        siteRoles: true,
+        organizationMemberships: { include: { organization: true } },
+        ownedOrganizations: true
+      }
+    });
+    if (!account) return null;
+    return dbAccountToModAccount(account);
+  } catch {
+    return null;
+  }
+}
+
 async function getSessionAccountByCookieValue(raw: string | undefined): Promise<ModAccount | null> {
   if (!raw) return null;
-  const session = unseal<{ accountId?: string; issuedAt?: number }>(raw);
+  const session = unseal<{ accountId?: string; sessionId?: string; token?: string; issuedAt?: number }>(raw);
+  if (databaseConfigured() && session?.sessionId) {
+    const db = getDb();
+    if (!db) return null;
+    try {
+      const stored = await db.session.findUnique({
+        where: { id: session.sessionId },
+        include: {
+          account: {
+            include: {
+              identities: true,
+              siteRoles: true,
+              organizationMemberships: { include: { organization: true } },
+              ownedOrganizations: true
+            }
+          }
+        }
+      });
+      if (!stored || stored.revokedAt || stored.expiresAt <= new Date()) return null;
+      const token = session.token;
+      if (!token) return null;
+      const tokenHash = createHmac('sha256', secret()).update(`session:${token}`).digest('hex');
+      if (!hashesMatch(stored.tokenHash, tokenHash)) return null;
+      void db.session.update({ where: { id: stored.id }, data: { lastSeenAt: new Date() } }).catch(() => undefined);
+      return dbAccountToModAccount(stored.account);
+    } catch {
+      return null;
+    }
+  }
   if (!session?.accountId || !session.issuedAt || Date.now() - session.issuedAt > SESSION_TTL_SECONDS * 1000) {
     return null;
   }
+  if (databaseConfigured()) return findDbAccountById(session.accountId);
   const accounts = await readAccounts();
   return accounts.find((account) => account.id === session.accountId) ?? null;
 }
@@ -447,14 +716,21 @@ export async function getSessionAccount(request: NextRequest): Promise<ModAccoun
 
 export function getSessionAccountSummary(account: ModAccount): SessionAccountSummary {
   const identity = getAccountPrimaryIdentity(account);
+  const official = hasOfficialIdentity(account);
+  const siteRoles = [...new Set(account.siteRoles ?? [])];
   return {
+    id: account.id,
     displayName: identity.displayName,
     username: identity.username ?? identity.displayName,
     provider: identity.provider,
     avatarUrl: getAccountAvatarUrl(account),
-    isAdmin: isCommunityAdmin(account),
+    isAdmin: (account.status ?? 'ACTIVE') === 'ACTIVE' && (isCommunityAdmin(account) || siteRoles.includes('ADMIN')),
+    hasOfficialIdentity: official,
+    siteRoles,
     organizations: normalizeOrganizationNames(account.organizations),
-    ownedOrganizations: normalizeOrganizationNames(account.ownedOrganizations)
+    ownedOrganizations: normalizeOrganizationNames(account.ownedOrganizations),
+    organizationDetails: account.organizationDetails,
+    status: account.status
   };
 }
 
@@ -467,6 +743,27 @@ export async function getServerSessionAccountSummary(): Promise<SessionAccountSu
 }
 
 export async function findModAccountByIdentity(identity: PendingIdentity): Promise<ModAccount | null> {
+  const db = getDb();
+  if (db) {
+    try {
+      const found = await db.identity.findUnique({
+        where: { provider_subject: { provider: identity.provider === 'official' ? 'OFFICIAL' : 'COMMUNITY', subject: identity.subject } },
+        include: {
+          account: {
+            include: {
+              identities: true,
+              siteRoles: true,
+              organizationMemberships: { include: { organization: true } },
+              ownedOrganizations: true
+            }
+          }
+        }
+      });
+      return found ? dbAccountToModAccount(found.account) : null;
+    } catch {
+      return null;
+    }
+  }
   const accounts = await readAccounts();
   return accounts.find((account) => accountIdentities(account).some((item) => identityMatches(item, identity))) ?? null;
 }
@@ -480,6 +777,19 @@ function accountEmailMatches(account: ModAccount, email: string): boolean {
 }
 
 export async function findBindingConflict(identity: PendingIdentity, bindEmail: string): Promise<ModAccount | null> {
+  const db = getDb();
+  if (db) {
+    try {
+      const accounts = await db.account.findMany({
+        where: { bindEmail: { equals: bindEmail, mode: 'insensitive' } },
+        include: { identities: true, siteRoles: true, organizationMemberships: { include: { organization: true } }, ownedOrganizations: true }
+      });
+      const conflict = accounts.find((account) => account.identities.some((item) => item.provider === (identity.provider === 'official' ? 'OFFICIAL' : 'COMMUNITY') && item.subject !== identity.subject));
+      return conflict ? dbAccountToModAccount(conflict) : null;
+    } catch {
+      return null;
+    }
+  }
   const accounts = await readAccounts();
   return (
     accounts.find((account) => {
@@ -508,6 +818,8 @@ function updateAccountIdentity(account: ModAccount, identity: PendingIdentity, n
 }
 
 export async function authenticateIdentity(identity: PendingIdentity): Promise<IdentityAuthenticationResult> {
+  const db = getDb();
+  if (db) return authenticateIdentityInDatabase(db, identity);
   const accounts = await readAccounts();
   const now = new Date().toISOString();
   const existing = accounts.find((account) => accountIdentities(account).some((item) => identityMatches(item, identity)));
@@ -532,6 +844,87 @@ export async function authenticateIdentity(identity: PendingIdentity): Promise<I
   return { status: 'authenticated', account: target };
 }
 
+function safeUsername(value: string): string {
+  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 70);
+  return normalized || `user-${randomBytes(5).toString('hex')}`;
+}
+
+function providerEnum(provider: AuthProvider): 'OFFICIAL' | 'COMMUNITY' {
+  return provider === 'official' ? 'OFFICIAL' : 'COMMUNITY';
+}
+
+async function loadDbAccount(db: NonNullable<ReturnType<typeof getDb>>, accountId: string): Promise<ModAccount> {
+  const account = await db.account.findUniqueOrThrow({
+    where: { id: accountId },
+    include: {
+      identities: true,
+      siteRoles: true,
+      organizationMemberships: { include: { organization: true } },
+      ownedOrganizations: true
+    }
+  });
+  return dbAccountToModAccount(account);
+}
+
+async function syncDbIdentity(db: NonNullable<ReturnType<typeof getDb>>, accountId: string, identity: PendingIdentity, now: Date): Promise<void> {
+  await db.identity.upsert({
+    where: { provider_subject: { provider: providerEnum(identity.provider), subject: identity.subject } },
+    create: {
+      accountId,
+      provider: providerEnum(identity.provider),
+      subject: identity.subject,
+      displayName: identity.displayName,
+      providerEmail: identity.providerEmail,
+      providerEmailVerified: identity.providerEmailVerified === true,
+      username: identity.username,
+      playerName: identity.playerName,
+      playerUid: identity.playerUid,
+      avatarUrl: identity.avatarUrl,
+      groups: identity.groups ?? undefined,
+      lastSeenAt: now
+    },
+    update: {
+      accountId,
+      displayName: identity.displayName,
+      providerEmail: identity.providerEmail,
+      providerEmailVerified: identity.providerEmailVerified === true,
+      username: identity.username,
+      playerName: identity.playerName,
+      playerUid: identity.playerUid,
+      avatarUrl: identity.avatarUrl,
+      groups: identity.groups ?? undefined,
+      lastSeenAt: now
+    }
+  });
+  const preferred = identity.provider === 'community' ? identity : undefined;
+  if (preferred) {
+    await db.account.update({ where: { id: accountId }, data: { displayName: preferred.displayName, username: safeUsername(preferred.username ?? preferred.displayName), avatarUrl: preferred.avatarUrl, lastLoginAt: now } });
+  } else {
+    await db.account.update({ where: { id: accountId }, data: { lastLoginAt: now } });
+  }
+}
+
+async function authenticateIdentityInDatabase(db: NonNullable<ReturnType<typeof getDb>>, identity: PendingIdentity): Promise<IdentityAuthenticationResult> {
+  const provider = providerEnum(identity.provider);
+  const now = new Date();
+  try {
+    const existing = await db.identity.findUnique({ where: { provider_subject: { provider, subject: identity.subject } } });
+    if (existing) {
+      await syncDbIdentity(db, existing.accountId, identity, now);
+      return { status: 'authenticated', account: await loadDbAccount(db, existing.accountId) };
+    }
+    const providerEmail = normalizeEmail(identity.providerEmail);
+    if (!providerEmail || (identity.provider === 'community' && identity.providerEmailVerified !== true)) return { status: 'needs-binding' };
+    const emailMatches = await db.account.findMany({ where: { bindEmail: { equals: providerEmail, mode: 'insensitive' } }, include: { identities: true } });
+    if (emailMatches.some((account) => account.identities.some((item) => item.provider === provider))) return { status: 'provider-conflict', provider: identity.provider };
+    if (emailMatches.length !== 1) return { status: 'needs-binding' };
+    await syncDbIdentity(db, emailMatches[0].id, identity, now);
+    return { status: 'authenticated', account: await loadDbAccount(db, emailMatches[0].id) };
+  } catch {
+    return { status: 'needs-binding' };
+  }
+}
+
 async function writeAccounts(accounts: ModAccount[]): Promise<void> {
   await writeJsonArray(dataFile(), accounts);
 }
@@ -549,6 +942,8 @@ async function writeJsonArray<T>(file: string, values: T[]): Promise<void> {
 }
 
 export async function upsertModAccount(identity: PendingIdentity, bindEmail: string): Promise<ModAccount> {
+  const db = getDb();
+  if (db) return upsertModAccountInDatabase(db, identity, bindEmail);
   const accounts = await readAccounts();
   const now = new Date().toISOString();
   const existing = accounts.find((account) => accountIdentities(account).some((item) => identityMatches(item, identity)));
@@ -582,4 +977,57 @@ export async function upsertModAccount(identity: PendingIdentity, bindEmail: str
   accounts.push(account);
   await writeAccounts(accounts);
   return account;
+}
+
+async function upsertModAccountInDatabase(db: NonNullable<ReturnType<typeof getDb>>, identity: PendingIdentity, bindEmail: string): Promise<ModAccount> {
+  const normalizedEmail = normalizeEmail(bindEmail);
+  if (!normalizedEmail) throw new Error('Invalid binding email');
+  const provider = providerEnum(identity.provider);
+  const now = new Date();
+  return db.$transaction(async (tx) => {
+    const existingIdentity = await tx.identity.findUnique({ where: { provider_subject: { provider, subject: identity.subject } } });
+    if (existingIdentity) {
+      await syncDbIdentity(tx as NonNullable<ReturnType<typeof getDb>>, existingIdentity.accountId, identity, now);
+      return loadDbAccount(tx as NonNullable<ReturnType<typeof getDb>>, existingIdentity.accountId);
+    }
+    const matches = await tx.account.findMany({ where: { bindEmail: { equals: normalizedEmail, mode: 'insensitive' } }, include: { identities: true } });
+    if (matches.some((account) => account.identities.some((item) => item.provider === provider)) || matches.length > 1) throw new AccountBindingConflictError(identity.provider);
+    if (matches.length === 1) {
+      await syncDbIdentity(tx as NonNullable<ReturnType<typeof getDb>>, matches[0].id, identity, now);
+      return loadDbAccount(tx as NonNullable<ReturnType<typeof getDb>>, matches[0].id);
+    }
+    const base = safeUsername(identity.username ?? identity.playerName ?? identity.displayName);
+    let username = base;
+    for (let index = 2; index < 1000; index += 1) {
+      const occupied = await tx.account.findUnique({ where: { username } });
+      if (!occupied) break;
+      username = `${base.slice(0, 70)}-${index}`;
+    }
+    const account = await tx.account.create({
+      data: {
+        id: `mod_${randomBytes(12).toString('hex')}`,
+        username,
+        displayName: identity.displayName,
+        bindEmail: normalizedEmail,
+        avatarUrl: identity.avatarUrl,
+        lastLoginAt: now,
+        identities: {
+          create: {
+            provider,
+            subject: identity.subject,
+            displayName: identity.displayName,
+            providerEmail: identity.providerEmail,
+            providerEmailVerified: identity.providerEmailVerified === true,
+            username: identity.username,
+            playerName: identity.playerName,
+            playerUid: identity.playerUid,
+            avatarUrl: identity.avatarUrl,
+            groups: identity.groups ?? undefined,
+            lastSeenAt: now
+          }
+        }
+      }
+    });
+    return loadDbAccount(tx as NonNullable<ReturnType<typeof getDb>>, account.id);
+  });
 }

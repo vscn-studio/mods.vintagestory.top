@@ -1,11 +1,12 @@
 'use client';
 
-import { BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, Coffee, Copy, Download, EllipsisVertical, Flag, GitBranch, Heart, MessageCircle, Pencil } from 'lucide-react';
+import { BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, Coffee, Copy, Download, EllipsisVertical, Flag, GitBranch, Heart, MessageCircle, Pencil, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
 import type { SessionAccountSummary } from '@/lib/auth-server';
 import { type PreviewSection } from '@/lib/preview-sections';
+import { ensureCsrfToken } from '@/lib/client-confirmation';
 
 type ContentPreviewPageProps = {
   kind: 'mod' | 'modpack';
@@ -27,7 +28,7 @@ type PreviewLocalizedValue = {
 
 type PreviewContent = {
   name: { zh: string; en: string };
-  author: string;
+  author?: string;
   authorType: 'user' | 'organization';
   authorId: string;
   description: { zh: string; en: string };
@@ -35,19 +36,27 @@ type PreviewContent = {
   compatibleVersions?: string[];
   environments?: PreviewLocalizedValue[];
   tags?: PreviewLocalizedValue[];
-  license?: PreviewLocalizedValue;
+  license?: PreviewLocalizedValue | string;
   published?: PreviewLocalizedValue;
   updated?: PreviewLocalizedValue;
+  id?: string;
+  slug?: string;
+  owner?: { type: 'user' | 'organization'; id: string; slug?: string; username?: string; name: string } | null;
+  gameVersions?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+  stats?: { downloads: number; followers: number; favorites?: number; comments?: number };
+  links?: { repository?: string | null; issues?: string | null; wiki?: string | null; discord?: string | null; sponsor?: string | null };
+  releases?: Array<{ id: string; version: string; changelog?: string | null; status: string; compatibleVersions: unknown; environments: unknown; publishedAt?: string | null; updatedAt: string; files: Array<{ id: string; name: string; size: number; mimeType: string; downloads: number; scanStatus: string }> }>;
+  viewer?: { following?: boolean; favorited?: boolean; capabilities?: string[] };
+  screenshots?: Array<{ id: string; caption?: string | null; url: string; sortOrder: number }>;
 };
-
-const contentData: Record<string, PreviewContent> = {};
 
 const previewCopy = {
   'zh-CN': {
     author: '作者',
     ownerRole: '所有者',
     organizationRole: '组织',
-    membersPlaceholder: '成员列表接入后将在这里显示。',
     downloads: '下载量',
     followers: '关注量',
     follow: '关注',
@@ -84,15 +93,14 @@ const previewCopy = {
     clientOnly: '纯客户端',
     serverOnly: '纯服务器',
     bothSides: '双端',
-    placeholder: '详细内容接入后将在这里显示。',
     noData: '暂无内容。',
     versionValue: '1.21 · 1.22'
+    ,editComment: '编辑评论', deleteComment: '删除评论', saveComment: '保存评论', cancelComment: '取消', edited: '已编辑'
   },
   en: {
     author: 'Author',
     ownerRole: 'Owner',
     organizationRole: 'Organization',
-    membersPlaceholder: 'Members will appear here when connected.',
     downloads: 'Downloads',
     followers: 'Followers',
     follow: 'Follow',
@@ -129,9 +137,9 @@ const previewCopy = {
     clientOnly: 'Client only',
     serverOnly: 'Server only',
     bothSides: 'Client + server',
-    placeholder: 'Detailed content will appear here when connected.',
     noData: 'No content yet.',
     versionValue: '1.21 · 1.22'
+    ,editComment: 'Edit comment', deleteComment: 'Delete comment', saveComment: 'Save comment', cancelComment: 'Cancel', edited: 'Edited'
   }
 } as const;
 
@@ -143,10 +151,6 @@ function titleFromId(id: string): string {
     .join(' ');
 }
 
-function profileId(value: string): string {
-  return value.trim().toLocaleLowerCase().replace(/\s+/g, '-');
-}
-
 export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = null }: ContentPreviewPageProps) {
   const language = useSiteLanguage();
   const text = previewCopy[language];
@@ -154,11 +158,70 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
   const [activeSection, setActiveSection] = useState<PreviewSection>(initialSection ?? 'description');
   const [isVersionFilterOpen, setIsVersionFilterOpen] = useState(false);
   const [selectedVersions, setSelectedVersions] = useState<string[]>([]);
+  const [versionPage, setVersionPage] = useState(1);
   const [openReleaseMenu, setOpenReleaseMenu] = useState<string | null>(null);
+  const [content, setContent] = useState<PreviewContent | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [following, setFollowing] = useState(false);
+  const [favorited, setFavorited] = useState(false);
+  const [actionMessage, setActionMessage] = useState('');
+  const [comments, setComments] = useState<Array<{ id: string; body: string; author: { username: string; displayName: string; avatarUrl?: string | null }; createdAt: string; updatedAt?: string }>>([]);
+  const [commentBody, setCommentBody] = useState('');
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentBody, setEditingCommentBody] = useState('');
+  const [commentBusyId, setCommentBusyId] = useState('');
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const versionFilterRef = useRef<HTMLDivElement>(null);
   const releaseMenuRef = useRef<HTMLDivElement>(null);
   const basePath = kind === 'modpack' ? `/modpack/${id}` : `/mod/${id}`;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setLoadError('');
+    setNotFound(false);
+    fetch(`/api/v1/projects/${encodeURIComponent(id)}`, { cache: 'no-store', signal: controller.signal })
+      .then(async (response) => {
+        const payload = await response.json() as { data?: PreviewContent; error?: { message?: string } };
+        if (response.status === 404) { setNotFound(true); return; }
+        if (!response.ok || !payload.data) throw new Error(payload.error?.message ?? (language === 'en' ? 'Unable to load project.' : '项目加载失败。'));
+        const raw = payload.data as any;
+        setFollowing(Boolean(raw.viewer?.following));
+        setFavorited(Boolean(raw.viewer?.favorited));
+        const owner = raw.owner;
+        setContent({
+          ...raw,
+          authorType: owner?.type ?? 'user',
+          authorId: owner?.type === 'organization' ? owner.slug ?? owner.id : owner?.username ?? owner?.id ?? '',
+          author: owner?.name ?? '',
+          description: raw.description ?? { zh: '', en: '' },
+          tags: (raw.tags ?? []).map((tag: { name: string; nameEn?: string }) => ({ zh: tag.name, en: tag.nameEn ?? tag.name })),
+          environments: (raw.environments ?? []).map((environment: { name: string; nameEn?: string }) => ({ zh: environment.name, en: environment.nameEn ?? environment.name })),
+          license: typeof raw.license === 'string' ? { zh: raw.license, en: raw.license } : raw.license ?? { zh: '未指定', en: 'Unspecified' },
+          published: { zh: raw.createdAt ?? '', en: raw.createdAt ?? '' },
+          updated: { zh: raw.updatedAt ?? '', en: raw.updatedAt ?? '' }
+        });
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setLoadError(error instanceof Error ? error.message : (language === 'en' ? 'Unable to load project.' : '项目加载失败。'));
+      })
+      .finally(() => setLoading(false));
+    return () => controller.abort();
+  }, [id, language]);
+
+  async function reloadComments() {
+    const response = await fetch(`/api/v1/projects/${encodeURIComponent(id)}/comments`, { cache: 'no-store' });
+    const payload = await response.json().catch(() => ({})) as { data?: typeof comments };
+    if (response.ok) setComments(payload.data ?? []);
+  }
+
+  useEffect(() => {
+    if (loading || notFound) return;
+    void reloadComments().catch(() => undefined);
+  }, [id, loading, notFound]);
 
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {
@@ -202,34 +265,36 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
     return () => window.removeEventListener('popstate', handlePopState);
   }, [basePath]);
 
-  const fallback = {
+  const current = content ?? {
     name: { zh: titleFromId(id), en: titleFromId(id) },
-    author: 'Community creator',
+    author: language === 'en' ? 'Unknown creator' : '未知作者',
     authorType: 'user' as const,
-    authorId: 'community-creator',
-    description: { zh: text.placeholder, en: text.placeholder }
+    authorId: '',
+    description: { zh: '', en: '' },
+    stats: { downloads: 0, followers: 0 },
+    releases: []
   };
-  const content = contentData[id as keyof typeof contentData] ?? fallback;
-  const name = language === 'en' ? content.name.en : content.name.zh;
-  const description = language === 'en' ? content.description.en : content.description.zh;
-  const authorPath = content.authorType === 'user' ? `/user/${content.authorId}` : `/organization/${content.authorId}`;
-  const canEditContent = content.authorType === 'user'
-    ? profileId(sessionAccount?.username ?? '') === profileId(content.authorId)
-    : Boolean(sessionAccount?.ownedOrganizations.some((organizationName) => profileId(organizationName) === profileId(content.authorId)));
-  const members = content.members ?? [];
-  const compatibleVersions = content.compatibleVersions ?? [];
-  const runtimeEnvironments = content.environments ?? [];
-  const sidebarTags = content.tags ?? [];
-  const license = content.license ?? { zh: text.placeholder, en: text.placeholder };
-  const published = content.published ?? { zh: text.placeholder, en: text.placeholder };
-  const updated = content.updated ?? { zh: text.placeholder, en: text.placeholder };
-  const repositoryUrl = `https://github.com/scgm0/${id}`;
+  const name = language === 'en' ? current.name.en : current.name.zh;
+  const description = language === 'en' ? current.description.en : current.description.zh;
+  const author = current.author ?? (current.authorType === 'organization' ? current.owner?.name : undefined) ?? '';
+  const authorPath = current.authorType === 'user' ? `/user/${encodeURIComponent(current.authorId)}` : `/organization/${encodeURIComponent(current.authorId)}`;
+  const canEditContent = current.viewer?.capabilities?.some((capability) => [
+    'update', 'member.manage', 'transfer', 'archive', 'release.create', 'release.publish', 'file.manage'
+  ].includes(capability)) ?? false;
+  const members = current.members ?? [];
+  const compatibleVersions = current.compatibleVersions ?? current.gameVersions ?? [];
+  const runtimeEnvironments = current.environments ?? [];
+  const sidebarTags = current.tags ?? [];
+  const license = typeof current.license === 'string' ? { zh: current.license, en: current.license } : current.license ?? { zh: '未指定', en: 'Unspecified' };
+  const published = current.published ?? { zh: '', en: '' };
+  const updated = current.updated ?? { zh: '', en: '' };
+  const repositoryUrl = current.links?.repository ?? '';
   const relatedLinks = [
     { id: 'source', label: text.sourceCode, href: repositoryUrl },
-    { id: 'issues', label: text.issues, href: `${repositoryUrl}/issues` },
-    { id: 'wiki', label: text.wiki, href: `${repositoryUrl}/wiki` },
-    { id: 'discord', label: text.discord, href: 'https://discord.com/' },
-    { id: 'sponsor', label: text.sponsor, href: 'https://ko-fi.com/scgm0' }
+    { id: 'issues', label: text.issues, href: current.links?.issues ?? (repositoryUrl ? `${repositoryUrl}/issues` : '') },
+    { id: 'wiki', label: text.wiki, href: current.links?.wiki ?? (repositoryUrl ? `${repositoryUrl}/wiki` : '') },
+    { id: 'discord', label: text.discord, href: current.links?.discord ?? '' },
+    { id: 'sponsor', label: text.sponsor, href: current.links?.sponsor ?? '' }
   ];
   const sectionTabs: Array<{ id: PreviewSection; label: string }> = [
     { id: 'description', label: text.description },
@@ -243,15 +308,129 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
     changelog: `${basePath}/changelog`,
     versions: `${basePath}/versions`
   };
-  const screenshotCards: string[] = [];
-  const changelogEntries: Array<{ version: string; date: string; summary: string }> = [];
-  const versionEntries: Array<{ version: string; game: string; published: string; updated: string; downloads: string }> = [];
-  const gameVersionOptions = ['1.22', '1.21', '1.20'];
+  const screenshotCards = current.screenshots ?? [];
+  const releases = current.releases ?? [];
+  const changelogEntries = releases.filter((release) => release.changelog).map((release) => ({ version: release.version, date: release.publishedAt ?? release.updatedAt, summary: release.changelog ?? '' }));
+  const versionEntries = releases.filter((release) => release.status === 'published').map((release) => ({ version: release.version, game: Array.isArray(release.compatibleVersions) ? release.compatibleVersions.join(' · ') : '', published: release.publishedAt ?? release.updatedAt, updated: release.updatedAt, downloads: release.files.reduce((sum, file) => sum + file.downloads, 0).toLocaleString(), files: release.files }));
+  const gameVersionOptions = [...new Set(releases.flatMap((release) => Array.isArray(release.compatibleVersions) ? release.compatibleVersions.filter((value): value is string => typeof value === 'string') : []))];
   const selectedVersionLabel = selectedVersions.length > 0 ? selectedVersions.join(' · ') : text.allVersions;
+  const filteredVersionEntries = selectedVersions.length > 0
+    ? versionEntries.filter((entry) => entry.game.split(' · ').some((version) => selectedVersions.includes(version)))
+    : versionEntries;
+  const versionPageSize = 20;
+  const versionTotalPages = Math.max(1, Math.ceil(filteredVersionEntries.length / versionPageSize));
+  const visibleVersionEntries = filteredVersionEntries.slice((versionPage - 1) * versionPageSize, versionPage * versionPageSize);
+  const downloadableRelease = versionEntries.find((entry) => entry.files.length > 0);
+
+  useEffect(() => {
+    setVersionPage((page) => Math.min(page, versionTotalPages));
+  }, [versionTotalPages]);
 
   function toggleVersion(version: string) {
+    setVersionPage(1);
     setSelectedVersions((current) => current.includes(version) ? current.filter((item) => item !== version) : [...current, version]);
   }
+
+  async function mutate(path: string, method: 'POST' | 'PATCH' | 'DELETE', body?: unknown): Promise<boolean> {
+    if (!sessionAccount) {
+      setActionMessage(language === 'en' ? 'Sign in to use this action.' : '请先登录后再执行此操作。');
+      return false;
+    }
+    const csrf = await ensureCsrfToken();
+    const response = await fetch(path, { method, headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(csrf ? { 'x-csrf-token': decodeURIComponent(csrf) } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const payload = await response.json().catch(() => ({})) as { error?: { message?: string } };
+    if (!response.ok) {
+      setActionMessage(payload.error?.message ?? (language === 'en' ? 'Action failed.' : '操作失败。'));
+      return false;
+    }
+    setActionMessage('');
+    return true;
+  }
+
+  async function toggleFollow() {
+    const ok = await mutate(`/api/v1/projects/${encodeURIComponent(id)}/follow`, following ? 'DELETE' : 'POST');
+    if (ok) setFollowing((value) => !value);
+  }
+
+  async function toggleFavorite() {
+    const ok = await mutate(`/api/v1/projects/${encodeURIComponent(id)}/favorite`, favorited ? 'DELETE' : 'POST');
+    if (ok) setFavorited((value) => !value);
+  }
+
+  function downloadRelease(release: { files: Array<{ id: string }> }) {
+    const file = release.files[0];
+    if (!file) {
+      setActionMessage(language === 'en' ? 'No clean downloadable file is available.' : '当前没有可下载的干净文件。');
+      return;
+    }
+    window.location.href = `/api/v1/files/${encodeURIComponent(file.id)}/download`;
+  }
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setActionMessage(language === 'en' ? 'Link copied.' : '链接已复制。');
+    } catch {
+      setActionMessage(language === 'en' ? 'Unable to copy the link.' : '复制链接失败。');
+    }
+    setIsMoreOpen(false);
+  }
+
+  async function reportProject() {
+    const reason = window.prompt(language === 'en' ? 'Why are you reporting this project?' : '请说明举报原因：');
+    if (!reason?.trim()) return;
+    await mutate('/api/v1/reports', 'POST', { targetType: 'PROJECT', targetId: content?.id ?? id, reason: reason.trim() });
+    setIsMoreOpen(false);
+  }
+
+  async function addComment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!commentBody.trim()) return;
+    const ok = await mutate(`/api/v1/projects/${encodeURIComponent(id)}/comments`, 'POST', { body: commentBody.trim() });
+    if (ok) {
+      setCommentBody('');
+      await reloadComments();
+    }
+  }
+
+  function beginCommentEdit(comment: typeof comments[number]) {
+    setEditingCommentId(comment.id);
+    setEditingCommentBody(comment.body);
+  }
+
+  async function saveComment(commentId: string) {
+    const body = editingCommentBody.trim();
+    if (!body) return;
+    setCommentBusyId(commentId);
+    const ok = await mutate(`/api/v1/projects/${encodeURIComponent(id)}/comments?commentId=${encodeURIComponent(commentId)}`, 'PATCH', { body });
+    setCommentBusyId('');
+    if (!ok) return;
+    setComments((items) => items.map((comment) => comment.id === commentId ? { ...comment, body, updatedAt: new Date().toISOString() } : comment));
+    setEditingCommentId(null);
+    setEditingCommentBody('');
+  }
+
+  async function deleteComment(commentId: string) {
+    if (!window.confirm(text.deleteComment)) return;
+    setCommentBusyId(commentId);
+    const ok = await mutate(`/api/v1/projects/${encodeURIComponent(id)}/comments?commentId=${encodeURIComponent(commentId)}`, 'DELETE');
+    setCommentBusyId('');
+    if (!ok) return;
+    setComments((items) => items.filter((comment) => comment.id !== commentId));
+    if (editingCommentId === commentId) {
+      setEditingCommentId(null);
+      setEditingCommentBody('');
+    }
+  }
+
+  function formatDate(value: string | null | undefined): string {
+    if (!value) return text.noData;
+    try { return new Intl.DateTimeFormat(language === 'en' ? 'en' : 'zh-CN', { dateStyle: 'medium' }).format(new Date(value)); } catch { return value; }
+  }
+
+  if (loading) return <section className="preview-page"><div className="preview-page__inner"><p className="preview-empty-state">{language === 'en' ? 'Loading project…' : '正在加载项目…'}</p></div></section>;
+  if (notFound) return <section className="preview-page"><div className="preview-page__inner"><h1>{language === 'en' ? 'Project not found' : '项目不存在'}</h1><p className="preview-empty-state">{language === 'en' ? 'This project is private, archived, or unavailable.' : '项目可能是私有、已归档或不存在。'}</p></div></section>;
+  if (loadError) return <section className="preview-page"><div className="preview-page__inner"><h1>{language === 'en' ? 'Unable to load project' : '项目加载失败'}</h1><p className="preview-empty-state">{loadError}</p></div></section>;
 
   const versionToolbar = activeSection === 'versions' ? (
     <div className="preview-version-toolbar">
@@ -294,11 +473,11 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
       </div>
 
       <div className="content-pagination preview-version-pagination" aria-label={language === 'en' ? 'Pagination' : '分页'}>
-        <button className="content-pagination__button" type="button" title={text.previousPage} aria-label={text.previousPage} disabled>
+        <button className="content-pagination__button" type="button" title={text.previousPage} aria-label={text.previousPage} disabled={versionPage <= 1} onClick={() => setVersionPage((page) => Math.max(1, page - 1))}>
           <ChevronLeft size={17} strokeWidth={1.8} aria-hidden="true" />
         </button>
-        <span className="content-pagination__current" aria-current="page">1</span>
-        <button className="content-pagination__button" type="button" title={text.nextPage} aria-label={text.nextPage} disabled>
+        <span className="content-pagination__current" aria-current="page">{versionPage}</span>
+        <button className="content-pagination__button" type="button" title={text.nextPage} aria-label={text.nextPage} disabled={versionPage >= versionTotalPages} onClick={() => setVersionPage((page) => Math.min(versionTotalPages, page + 1))}>
           <ChevronRight size={17} strokeWidth={1.8} aria-hidden="true" />
         </button>
       </div>
@@ -323,28 +502,28 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
                   <dt aria-label={text.downloads}>
                     <Download size={16} strokeWidth={1.9} aria-hidden="true" />
                   </dt>
-                  <dd>128.4K</dd>
+                  <dd>{(current.stats?.downloads ?? 0).toLocaleString()}</dd>
                 </div>
                 <div>
                   <dt aria-label={text.followers}>
                     <Heart size={16} strokeWidth={1.9} aria-hidden="true" />
                   </dt>
-                  <dd>2.8K</dd>
+                  <dd>{(current.stats?.followers ?? 0).toLocaleString()}</dd>
                 </div>
               </dl>
               <ul className="preview-tags" aria-label={text.tags}>
-                <li>{kind === 'modpack' ? 'Modpack' : 'Survival'}</li>
-                <li>{text.versionValue}</li>
-                <li>{language === 'en' ? 'Community' : '社区创作'}</li>
+                <li>{sidebarTags[0] ? (language === 'en' ? sidebarTags[0].en : sidebarTags[0].zh) : text.noData}</li>
+                <li>{compatibleVersions.length ? compatibleVersions.slice(0, 3).join(' · ') : text.noData}</li>
+                <li>{kind === 'modpack' ? 'Modpack' : 'Mod'}</li>
               </ul>
             </div>
           </div>
           <div className="preview-hero__actions">
-            <button className="preview-action preview-action--primary" type="button">
+            <button className="preview-action preview-action--primary" type="button" disabled={!downloadableRelease} onClick={() => downloadableRelease && downloadRelease(downloadableRelease)}>
               <Download size={17} strokeWidth={1.9} aria-hidden="true" />
               <span>{text.download}</span>
             </button>
-            <button className="preview-action" type="button">
+            <button className={following ? 'preview-action preview-action--active' : 'preview-action'} type="button" aria-pressed={following} onClick={() => void toggleFollow()}>
               <Heart size={17} strokeWidth={1.9} aria-hidden="true" />
               <span>{text.follow}</span>
             </button>
@@ -365,17 +544,19 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
                 role="menu"
                 aria-hidden={!isMoreOpen}
               >
-                {canEditContent ? (
-                  <button className="preview-more__item" type="button" role="menuitem" onClick={() => setIsMoreOpen(false)}>
-                    <Pencil size={16} strokeWidth={1.9} aria-hidden="true" />
-                    {text.edit}
-                  </button>
-                ) : null}
-                <button className="preview-more__item preview-more__item--danger" type="button" role="menuitem" onClick={() => setIsMoreOpen(false)}>
+                <button className="preview-more__item" type="button" role="menuitem" onClick={() => void toggleFavorite()}>
+                  <Heart size={16} strokeWidth={1.9} aria-hidden="true" />
+                  {favorited ? (language === 'en' ? 'Remove favorite' : '取消收藏') : (language === 'en' ? 'Favorite' : '收藏')}
+                </button>
+                {canEditContent ? <button className="preview-more__item" type="button" role="menuitem" onClick={() => { window.location.href = `/projects/${encodeURIComponent(content?.slug ?? id)}/manage`; }}>
+                  <Pencil size={16} strokeWidth={1.9} aria-hidden="true" />
+                  {text.edit}
+                </button> : null}
+                <button className="preview-more__item preview-more__item--danger" type="button" role="menuitem" onClick={() => void reportProject()}>
                   <Flag size={16} strokeWidth={1.9} aria-hidden="true" />
                   {text.report}
                 </button>
-                <button className="preview-more__item" type="button" role="menuitem" onClick={() => setIsMoreOpen(false)}>
+                <button className="preview-more__item" type="button" role="menuitem" onClick={() => void copyLink()}>
                   <Copy size={16} strokeWidth={1.9} aria-hidden="true" />
                   {text.copyLink}
                 </button>
@@ -383,6 +564,7 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
             </div>
           </div>
         </header>
+        {actionMessage ? <p className="preview-action-message" role="status">{actionMessage}</p> : null}
 
         <nav className="content-switcher" aria-label={text.sectionNavigation}>
           {sectionTabs.map((tab) => (
@@ -408,20 +590,31 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
           <main className={activeSection === 'screenshots' || activeSection === 'versions' ? 'preview-main preview-main--flat' : 'preview-main'} id={`preview-panel-${activeSection}`} role="tabpanel" aria-label={sectionTabs.find((tab) => tab.id === activeSection)?.label}>
             {activeSection === 'description' ? (
               <section className="preview-section">
-                <p>{description}</p>
-                <p>{text.placeholder}</p>
+                {description ? <p>{description}</p> : <p className="preview-empty-state">{text.noData}</p>}
+                <div className="preview-comments">
+                  <div className="preview-section__heading"><h2>{language === 'en' ? 'Comments' : '评论'}</h2></div>
+                  {comments.length ? <div className="preview-comments__list">{comments.map((comment) => {
+                    const ownComment = comment.author.username === sessionAccount?.username;
+                    const editing = editingCommentId === comment.id;
+                    return <article className="preview-comment" key={comment.id}>
+                      <div className="preview-comment__heading"><span><strong>{comment.author.displayName || comment.author.username}</strong><time>{formatDate(comment.createdAt)}{comment.updatedAt && comment.updatedAt !== comment.createdAt ? ` · ${text.edited}` : ''}</time></span>{ownComment ? <span className="preview-comment__actions">{editing ? <><button className="preview-more__item" type="button" disabled={commentBusyId === comment.id} onClick={() => void saveComment(comment.id)}><Check size={15} />{text.saveComment}</button><button className="preview-more__item" type="button" disabled={commentBusyId === comment.id} onClick={() => { setEditingCommentId(null); setEditingCommentBody(''); }}><X size={15} />{text.cancelComment}</button></> : <><button className="preview-more__item" type="button" onClick={() => beginCommentEdit(comment)}><Pencil size={15} />{text.editComment}</button><button className="preview-more__item preview-more__item--danger" type="button" disabled={commentBusyId === comment.id} onClick={() => void deleteComment(comment.id)}><Trash2 size={15} />{text.deleteComment}</button></>}</span> : null}</div>
+                      {editing ? <textarea className="preview-comment__editor" value={editingCommentBody} onChange={(event) => setEditingCommentBody(event.target.value)} maxLength={5000} rows={3} autoFocus /> : <p>{comment.body}</p>}
+                    </article>;
+                  })}</div> : <p className="preview-empty-state">{text.noData}</p>}
+                  <form className="preview-comment-form" onSubmit={addComment}><textarea value={commentBody} onChange={(event) => setCommentBody(event.target.value)} maxLength={5000} rows={3} placeholder={sessionAccount ? (language === 'en' ? 'Write a comment' : '写下评论') : (language === 'en' ? 'Sign in to comment' : '登录后发表评论')} disabled={!sessionAccount} /><button className="auth-modal__primary" type="submit" disabled={!sessionAccount || !commentBody.trim()}>{language === 'en' ? 'Post' : '发布'}</button></form>
+                </div>
               </section>
             ) : null}
 
             {activeSection === 'screenshots' ? (
               <section className="preview-section">
                 {screenshotCards.length > 0 ? <div className="preview-screenshot-grid">
-                  {screenshotCards.map((caption) => (
-                    <figure className="preview-screenshot-card" key={caption}>
+                  {screenshotCards.map((screenshot) => (
+                    <figure className="preview-screenshot-card" key={screenshot.id}>
                       <div className="preview-screenshot-card__media">
-                        <img src="/brand/vintage-story-game-logo.png" alt={caption} loading="lazy" />
+                        <img src={screenshot.url} alt={screenshot.caption ?? name} loading="lazy" />
                       </div>
-                      <figcaption>{caption}</figcaption>
+                      {screenshot.caption ? <figcaption>{screenshot.caption}</figcaption> : null}
                     </figure>
                   ))}
                 </div> : <p className="preview-empty-state">{text.noData}</p>}
@@ -436,9 +629,9 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
                       <div className="preview-changelog-item__heading">
                         <div className="preview-changelog-item__meta">
                           <strong>v{entry.version}</strong>
-                          <time dateTime={entry.date}>{entry.date}</time>
+                          <time dateTime={entry.date}>{formatDate(entry.date)}</time>
                         </div>
-                        <button className="preview-action preview-action--primary preview-changelog-item__download" type="button">
+                        <button className="preview-action preview-action--primary preview-changelog-item__download" type="button" onClick={() => { const release = releases.find((item) => item.version === entry.version); if (release) downloadRelease(release); }}>
                           <Download size={16} strokeWidth={1.9} aria-hidden="true" />
                           <span>{text.download}</span>
                         </button>
@@ -465,7 +658,7 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
                       </tr>
                     </thead>
                     <tbody>
-                      {versionEntries.length > 0 ? versionEntries.map((entry) => (
+                      {visibleVersionEntries.length > 0 ? visibleVersionEntries.map((entry) => (
                         <tr key={entry.version}>
                           <th scope="row"><strong>v{entry.version}</strong></th>
                           <td>
@@ -473,11 +666,11 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
                               {entry.game.split(' · ').map((version) => <li key={version}>{version}</li>)}
                             </ul>
                           </td>
-                          <td><time dateTime={entry.published}>{entry.published}</time></td>
-                          <td><time dateTime={entry.updated}>{entry.updated}</time></td>
+                          <td><time dateTime={entry.published}>{formatDate(entry.published)}</time></td>
+                          <td><time dateTime={entry.updated}>{formatDate(entry.updated)}</time></td>
                           <td>{entry.downloads}</td>
                           <td>
-                            <button className="preview-version-table__download" type="button" title={text.download} aria-label={`${text.download} v${entry.version}`}>
+                            <button className="preview-version-table__download" type="button" title={text.download} aria-label={`${text.download} v${entry.version}`} onClick={() => { const release = releases.find((item) => item.version === entry.version); if (release) downloadRelease(release); }}>
                               <Download size={16} strokeWidth={1.9} aria-hidden="true" />
                               <span>{text.download}</span>
                             </button>
@@ -500,15 +693,15 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
                                 role="menu"
                                 aria-hidden={openReleaseMenu !== entry.version}
                               >
-                                <button className="preview-more__item" type="button" role="menuitem" onClick={() => setOpenReleaseMenu(null)}>
+                                <button className="preview-more__item" type="button" role="menuitem" onClick={() => { const release = releases.find((item) => item.version === entry.version); if (release) downloadRelease(release); setOpenReleaseMenu(null); }}>
                                   <Download size={16} strokeWidth={1.9} aria-hidden="true" />
                                   {text.download}
                                 </button>
-                                <button className="preview-more__item preview-more__item--danger" type="button" role="menuitem" onClick={() => setOpenReleaseMenu(null)}>
+                                <button className="preview-more__item preview-more__item--danger" type="button" role="menuitem" onClick={() => { void reportProject(); setOpenReleaseMenu(null); }}>
                                   <Flag size={16} strokeWidth={1.9} aria-hidden="true" />
                                   {text.report}
                                 </button>
-                                <button className="preview-more__item" type="button" role="menuitem" onClick={() => setOpenReleaseMenu(null)}>
+                                <button className="preview-more__item" type="button" role="menuitem" onClick={() => { void copyLink(); setOpenReleaseMenu(null); }}>
                                   <Copy size={16} strokeWidth={1.9} aria-hidden="true" />
                                   {text.copyLink}
                                 </button>
@@ -558,11 +751,11 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
                   <img src="/brand/logo-icon-rounded.svg" alt="" />
                 </span>
                 <span className="preview-owner-card__name">
-                  <strong>{content.author}</strong>
-                  <span>{content.authorType === 'organization' ? text.organizationRole : text.ownerRole}</span>
+                    <strong>{author}</strong>
+                    <span>{current.authorType === 'organization' ? text.organizationRole : text.ownerRole}</span>
                 </span>
               </Link>
-              {content.authorType === 'organization' ? (
+              {current.authorType === 'organization' ? (
                 <div className="preview-owner-card__members">
                   {members.length > 0 ? (
                     <div className="preview-owner-card__member-list">
@@ -579,7 +772,7 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
                       ))}
                     </div>
                   ) : (
-                    <p>{text.membersPlaceholder}</p>
+                    <p>{text.noData}</p>
                   )}
                 </div>
               ) : null}
@@ -590,7 +783,7 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
                 <h2>{text.relatedLinks}</h2>
               </div>
               <nav className="preview-related-links" aria-label={text.relatedLinks}>
-                {relatedLinks.map((link) => (
+                {relatedLinks.filter((link) => link.href).map((link) => (
                   <span className="preview-related-links__item" key={link.label}>
                     <span className="preview-related-links__icon" aria-hidden="true">
                       {link.id === 'source' || link.id === 'issues' ? <GitBranch size={17} strokeWidth={1.8} aria-hidden="true" /> : null}
@@ -625,11 +818,11 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
                 </div>
                 <div>
                   <dt>{text.published}</dt>
-                  <dd>{language === 'en' ? published.en : published.zh}</dd>
+                    <dd>{published.en || published.zh || text.noData}</dd>
                 </div>
                 <div>
                   <dt>{text.updated}</dt>
-                  <dd>{language === 'en' ? updated.en : updated.zh}</dd>
+                    <dd>{updated.en || updated.zh || text.noData}</dd>
                 </div>
               </dl>
             </section>

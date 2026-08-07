@@ -1,0 +1,579 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+enum AuthProvider {
+  OFFICIAL
+  COMMUNITY
+}
+
+enum SiteRole {
+  MODERATOR
+  REVIEWER
+  ADMIN
+}
+
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  MAINTAINER
+  MEMBER
+  VIEWER
+}
+
+enum ProjectType {
+  MOD
+  MODPACK
+  THEME_PACK
+  SERVER
+}
+
+enum ProjectVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ProjectRole {
+  OWNER
+  MAINTAINER
+  CONTRIBUTOR
+  REVIEWER
+  VIEWER
+}
+
+enum ReleaseStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  REJECTED
+  WITHDRAWN
+}
+
+enum ScanStatus {
+  PENDING
+  CLEAN
+  QUARANTINED
+  FAILED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  REVOKED
+  EXPIRED
+}
+
+enum ReviewStatus {
+  QUEUED
+  APPROVED
+  REJECTED
+  QUARANTINED
+}
+
+enum ReportStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+enum ReportTargetType {
+  PROJECT
+  RELEASE
+  FILE
+  COMMENT
+  ACCOUNT
+}
+
+model Account {
+  id                      String                   @id @db.VarChar(64)
+  username                String                   @unique @db.VarChar(80)
+  displayName             String                   @db.VarChar(120)
+  bio                     String?                  @db.VarChar(2000)
+  bindEmail               String                   @db.VarChar(320)
+  avatarUrl               String?                  @db.VarChar(2048)
+  status                  AccountStatus            @default(ACTIVE)
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  lastLoginAt             DateTime?
+  identities              Identity[]
+  sessions                Session[]
+  siteRoles               SiteRoleAssignment[]
+  ownedOrganizations      Organization[]           @relation("OrganizationOwner")
+  organizationMemberships OrganizationMember[]
+  sentInvitations         OrganizationInvitation[] @relation("InvitationSender")
+  receivedInvitations     OrganizationInvitation[] @relation("InvitationRecipient")
+  ownedProjects           Project[]                @relation("ProjectOwnerAccount")
+  projectMemberships      ProjectMember[]
+  releases                Release[]                @relation("ReleaseCreator")
+  files                   File[]                   @relation("FileUploader")
+  screenshots             Screenshot[]             @relation("ScreenshotUploader")
+  favorites               Favorite[]
+  follows                 Follow[]
+  comments                Comment[]
+  reports                 Report[]                 @relation("ReportReporter")
+  reportedAccounts        Report[]                 @relation("AccountReports")
+  notifications           Notification[]
+  actionConfirmations     ActionConfirmation[]
+  auditEvents             AuditLog[]               @relation("AuditActor")
+  reviewTasks             ReviewTask[]             @relation("ReviewAssignee")
+  assignedRoles           SiteRoleAssignment[]     @relation("RoleAssigner")
+  createdAtProjects       Project[]                @relation("ProjectCreator")
+}
+
+model Identity {
+  id                    String       @id @default(cuid())
+  accountId             String
+  provider              AuthProvider
+  subject               String       @db.VarChar(320)
+  displayName           String       @db.VarChar(120)
+  providerEmail         String?      @db.VarChar(320)
+  providerEmailVerified Boolean      @default(false)
+  username              String?      @db.VarChar(80)
+  playerName            String?      @db.VarChar(120)
+  playerUid             String?      @db.VarChar(120)
+  avatarUrl             String?      @db.VarChar(2048)
+  groups                Json?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  lastSeenAt            DateTime?
+  account               Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, subject])
+  @@index([accountId])
+}
+
+model Session {
+  id         String    @id @default(cuid())
+  accountId  String
+  tokenHash  String    @unique @db.VarChar(128)
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  userAgent  String?   @db.VarChar(512)
+  ipAddress  String?   @db.VarChar(64)
+  account    Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, expiresAt])
+}
+
+model ActivationChallenge {
+  id        String      @id @db.VarChar(64)
+  provider  AuthProvider
+  subject   String      @db.VarChar(320)
+  bindEmail String      @db.VarChar(320)
+  codeHash  String      @db.VarChar(64)
+  attempts  Int         @default(0)
+  expiresAt DateTime
+  createdAt DateTime    @default(now())
+
+  @@unique([provider, subject, bindEmail])
+  @@index([expiresAt])
+  @@index([provider, subject, createdAt])
+}
+
+model ActionConfirmation {
+  id           String   @id @default(cuid())
+  accountId    String
+  action       String   @db.VarChar(120)
+  resourceType String   @db.VarChar(80)
+  resourceId   String   @db.VarChar(120)
+  tokenHash    String   @unique @db.VarChar(64)
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  createdAt    DateTime @default(now())
+  account      Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, action, resourceType, resourceId, expiresAt])
+}
+
+model SiteRoleAssignment {
+  id         String   @id @default(cuid())
+  accountId  String
+  role       SiteRole
+  assignedBy String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  assigner   Account? @relation("RoleAssigner", fields: [assignedBy], references: [id], onDelete: SetNull)
+
+  @@unique([accountId, role])
+  @@index([role])
+}
+
+model Organization {
+  id          String                   @id @default(cuid())
+  slug        String                   @unique @db.VarChar(80)
+  name        String                   @db.VarChar(120)
+  description String?                  @db.VarChar(2000)
+  avatarUrl   String?                  @db.VarChar(2048)
+  visibility  ProjectVisibility        @default(PUBLIC)
+  ownerId     String
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+  archivedAt  DateTime?
+  owner       Account                  @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members     OrganizationMember[]
+  invitations OrganizationInvitation[]
+  projects    Project[]
+
+  @@index([ownerId])
+  @@index([visibility, archivedAt])
+}
+
+model OrganizationMember {
+  id             String           @id @default(cuid())
+  organizationId String
+  accountId      String
+  role           OrganizationRole
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account        Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, accountId])
+  @@index([accountId])
+}
+
+model OrganizationInvitation {
+  id             String           @id @default(cuid())
+  organizationId String
+  recipientId    String
+  invitedById    String
+  role           OrganizationRole
+  status         InvitationStatus @default(PENDING)
+  expiresAt      DateTime
+  createdAt      DateTime         @default(now())
+  respondedAt    DateTime?
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  recipient      Account          @relation("InvitationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  invitedBy      Account          @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: Restrict)
+
+  @@index([recipientId, status])
+  @@index([organizationId, status])
+}
+
+model Project {
+  id                  String               @id @default(cuid())
+  slug                String               @unique @db.VarChar(100)
+  type                ProjectType
+  name                String               @db.VarChar(120)
+  nameEn              String?              @db.VarChar(120)
+  summary             String               @db.VarChar(500)
+  summaryEn           String?              @db.VarChar(500)
+  description         String?              @db.Text
+  descriptionEn       String?              @db.Text
+  visibility          ProjectVisibility    @default(PUBLIC)
+  status              ProjectStatus        @default(ACTIVE)
+  ownerAccountId      String?
+  ownerOrganizationId String?
+  creatorId           String
+  license             String?              @db.VarChar(120)
+  repositoryUrl       String?              @db.VarChar(2048)
+  issueUrl            String?              @db.VarChar(2048)
+  wikiUrl             String?              @db.VarChar(2048)
+  discordUrl          String?              @db.VarChar(2048)
+  sponsorUrl          String?              @db.VarChar(2048)
+  downloadCount       Int                  @default(0)
+  followerCount       Int                  @default(0)
+  favoriteCount       Int                  @default(0)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  archivedAt          DateTime?
+  ownerAccount        Account?             @relation("ProjectOwnerAccount", fields: [ownerAccountId], references: [id], onDelete: SetNull)
+  ownerOrganization   Organization?        @relation(fields: [ownerOrganizationId], references: [id], onDelete: SetNull)
+  creator             Account              @relation("ProjectCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  members             ProjectMember[]
+  releases            Release[]
+  tags                ProjectTag[]
+  categories          ProjectCategory[]
+  gameVersions        ProjectGameVersion[]
+  environments        ProjectEnvironment[]
+  favorites           Favorite[]
+  follows             Follow[]
+  reports             Report[]             @relation("ProjectReports")
+  reviewTasks         ReviewTask[]
+  comments            Comment[]
+  screenshots         Screenshot[]          
+
+  @@index([type, visibility, status, updatedAt])
+  @@index([ownerAccountId])
+  @@index([ownerOrganizationId])
+}
+
+model Screenshot {
+  id          String   @id @default(cuid())
+  projectId   String
+  objectKey   String   @unique @db.VarChar(1024)
+  caption     String?  @db.VarChar(500)
+  sortOrder   Int      @default(0)
+  createdById String
+  createdAt   DateTime @default(now())
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy   Account  @relation("ScreenshotUploader", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([projectId, sortOrder])
+}
+
+model ProjectMember {
+  id        String      @id @default(cuid())
+  projectId String
+  accountId String
+  role      ProjectRole
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  account   Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, accountId])
+  @@index([accountId])
+}
+
+model Release {
+  id                 String        @id @default(cuid())
+  projectId          String
+  version            String        @db.VarChar(80)
+  changelog          String?       @db.Text
+  status             ReleaseStatus @default(DRAFT)
+  compatibleVersions Json?
+  environments       Json?
+  publishedAt        DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  createdById        String
+  project            Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy          Account       @relation("ReleaseCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  files              File[]
+  reviewTasks        ReviewTask[]
+  reports            Report[]      @relation("ReleaseReports")
+
+  @@unique([projectId, version])
+  @@index([projectId, status, publishedAt])
+}
+
+model File {
+  id           String       @id @default(cuid())
+  releaseId    String
+  objectKey    String       @unique @db.VarChar(1024)
+  name         String       @db.VarChar(255)
+  mimeType     String       @db.VarChar(160)
+  size         BigInt
+  sha256       String       @db.VarChar(64)
+  scanStatus   ScanStatus   @default(PENDING)
+  downloads    Int          @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  uploadedById String
+  release      Release      @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  uploadedBy   Account      @relation("FileUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  reports      Report[]     @relation("FileReports")
+  reviewTasks  ReviewTask[]
+
+  @@index([releaseId, scanStatus])
+  @@index([sha256])
+}
+
+model StorageObject {
+  id        String    @id @default(cuid())
+  objectKey String    @unique @db.VarChar(1024)
+  provider  String    @db.VarChar(40)
+  bucket    String?   @db.VarChar(255)
+  mimeType  String    @db.VarChar(160)
+  size      BigInt
+  sha256    String    @db.VarChar(64)
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+}
+
+model Tag {
+  id       String       @id @default(cuid())
+  slug     String       @unique @db.VarChar(80)
+  name     String       @db.VarChar(120)
+  nameEn   String?      @db.VarChar(120)
+  projects ProjectTag[]
+}
+
+model ProjectTag {
+  projectId String
+  tagId     String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, tagId])
+}
+
+model Category {
+  id       String            @id @default(cuid())
+  slug     String            @unique @db.VarChar(80)
+  name     String            @db.VarChar(120)
+  nameEn   String?           @db.VarChar(120)
+  projects ProjectCategory[]
+}
+
+model ProjectCategory {
+  projectId  String
+  categoryId String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, categoryId])
+}
+
+model GameVersion {
+  id       String               @id @default(cuid())
+  value    String               @unique @db.VarChar(40)
+  projects ProjectGameVersion[]
+}
+
+model ProjectGameVersion {
+  projectId     String
+  gameVersionId String
+  project       Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  gameVersion   GameVersion @relation(fields: [gameVersionId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, gameVersionId])
+}
+
+model Environment {
+  id       String               @id @default(cuid())
+  slug     String               @unique @db.VarChar(80)
+  name     String               @db.VarChar(120)
+  nameEn   String?              @db.VarChar(120)
+  projects ProjectEnvironment[]
+}
+
+model ProjectEnvironment {
+  projectId     String
+  environmentId String
+  project       Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  environment   Environment @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, environmentId])
+}
+
+model Favorite {
+  accountId String
+  projectId String
+  createdAt DateTime @default(now())
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([accountId, projectId])
+}
+
+model Follow {
+  accountId String
+  projectId String
+  createdAt DateTime @default(now())
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([accountId, projectId])
+}
+
+model Comment {
+  id        String    @id @default(cuid())
+  projectId String
+  accountId String
+  body      String    @db.Text
+  hiddenAt  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  reports   Report[]  @relation("CommentReports")
+
+  @@index([projectId, createdAt])
+}
+
+model Report {
+  id         String           @id @default(cuid())
+  reporterId String
+  targetType ReportTargetType
+  projectId  String?
+  releaseId  String?
+  fileId     String?
+  commentId  String?
+  accountId  String?
+  reason     String           @db.VarChar(2000)
+  status     ReportStatus     @default(OPEN)
+  resolution String?          @db.VarChar(2000)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  reporter   Account          @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  project    Project?         @relation("ProjectReports", fields: [projectId], references: [id], onDelete: Cascade)
+  release    Release?         @relation("ReleaseReports", fields: [releaseId], references: [id], onDelete: Cascade)
+  file       File?            @relation("FileReports", fields: [fileId], references: [id], onDelete: Cascade)
+  comment    Comment?         @relation("CommentReports", fields: [commentId], references: [id], onDelete: Cascade)
+  account    Account?         @relation("AccountReports", fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([targetType])
+}
+
+model ReviewTask {
+  id           String       @id @default(cuid())
+  projectId    String?
+  releaseId    String?
+  fileId       String?
+  status       ReviewStatus @default(QUEUED)
+  decision     String?      @db.VarChar(2000)
+  assignedToId String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  release      Release?     @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  file         File?        @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  assignedTo   Account?     @relation("ReviewAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  accountId String
+  type      String    @db.VarChar(80)
+  payload   Json
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, readAt, createdAt])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  actorId      String?
+  action       String   @db.VarChar(120)
+  resourceType String   @db.VarChar(80)
+  resourceId   String?  @db.VarChar(120)
+  before       Json?
+  after        Json?
+  requestId    String?  @db.VarChar(80)
+  ipAddress    String?  @db.VarChar(64)
+  userAgent    String?  @db.VarChar(512)
+  createdAt    DateTime @default(now())
+  actor        Account? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([resourceType, resourceId, createdAt])
+  @@index([action, createdAt])
+}

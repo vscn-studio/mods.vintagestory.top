@@ -3,6 +3,7 @@
 import { KeyRound, LoaderCircle, Mail, ShieldCheck, X } from 'lucide-react';
 import { FormEvent, useEffect, useState } from 'react';
 import type { SiteLanguage } from '@/lib/site-language';
+import { ensureCsrfToken } from '@/lib/client-confirmation';
 
 export type AuthProvider = 'official' | 'community';
 export type { SiteLanguage } from '@/lib/site-language';
@@ -168,6 +169,11 @@ export function AuthModal({
     }
   };
 
+  async function csrfHeaders(): Promise<Record<string, string>> {
+    const token = await ensureCsrfToken();
+    return token ? { 'x-csrf-token': decodeURIComponent(token) } : {};
+  }
+
   async function verifyOfficial(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
@@ -176,7 +182,7 @@ export function AuthModal({
     try {
       const response = await fetch('/api/auth/official', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await csrfHeaders()) },
         body: JSON.stringify({ account, password, totpCode, preLoginToken })
       });
       if (!response.ok) {
@@ -215,7 +221,7 @@ export function AuthModal({
     try {
       const response = await fetch('/api/auth/bind', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await csrfHeaders()) },
         body: JSON.stringify({ bindEmail, activationCode })
       });
       if (!response.ok) {
@@ -244,7 +250,7 @@ export function AuthModal({
     try {
       const response = await fetch('/api/auth/activation/request', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await csrfHeaders()) },
         body: JSON.stringify({ bindEmail: normalizedEmail })
       });
       if (!response.ok) {

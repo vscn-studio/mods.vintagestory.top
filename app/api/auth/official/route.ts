@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateIdentity, clearPendingIdentity, setAccountSession, setPendingIdentity } from '@/lib/auth-server';
+import { authenticateIdentity, clearPendingIdentity, createAccountSession, setPendingIdentity } from '@/lib/auth-server';
+import { checkCsrf, rateLimit } from '@/lib/request-security';
 
 export const runtime = 'nodejs';
 
@@ -18,6 +19,8 @@ function errorResponse(message: string, status = 400, extra?: Record<string, unk
 }
 
 export async function POST(request: NextRequest) {
+  if (!checkCsrf(request)) return errorResponse('请求来源校验失败', 403);
+  if (!rateLimit(request, 20)) return errorResponse('请求过于频繁，请稍后重试', 429);
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -103,9 +106,16 @@ export async function POST(request: NextRequest) {
   if (authentication.status === 'provider-conflict') {
     return errorResponse('该邮箱已绑定另外一个游戏账号。', 409, { code: 'EMAIL_PROVIDER_CONFLICT' });
   }
+  if (authentication.status === 'authenticated' && authentication.account.status !== 'ACTIVE') {
+    return errorResponse('该账号已被停用，无法登录。', 403, { code: 'ACCOUNT_DISABLED' });
+  }
   if (authentication.status === 'authenticated') {
     const response = NextResponse.json({ ok: true, authenticated: true, identity });
-    setAccountSession(response, authentication.account.id);
+    try {
+      await createAccountSession(response, authentication.account.id, request);
+    } catch {
+      return errorResponse('会话服务暂时不可用，请稍后重试。', 503);
+    }
     clearPendingIdentity(response);
     return response;
   }

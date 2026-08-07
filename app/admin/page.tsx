@@ -7,7 +7,7 @@ export default async function AdminPage() {
   const preferences = await getSitePreferences();
   const account = preferences.sessionAccount;
 
-  if (!account || account.provider !== 'community' || !account.isAdmin) {
+  if (!account || !account.isAdmin) {
     notFound();
   }
 

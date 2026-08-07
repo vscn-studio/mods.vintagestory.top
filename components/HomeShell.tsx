@@ -30,8 +30,12 @@ import {
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AuthModal, type AuthProvider, type SiteLanguage } from '@/components/AuthModal';
 import { CreateProjectModal } from '@/components/CreateProjectModal';
+import { CreateOrganizationModal } from '@/components/CreateOrganizationModal';
+import { DevelopmentNoticeModal } from '@/components/DevelopmentNoticeModal';
 import { SiteLanguageContext } from '@/components/SiteLanguageContext';
 import type { SessionAccountSummary } from '@/lib/auth-server';
+import { ensureCsrfToken } from '@/lib/client-confirmation';
+import { saveProjectDraft } from '@/lib/project-draft';
 
 const usePreferenceLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
@@ -90,6 +94,7 @@ const siteCopy = {
     submitOptions: '发布选项',
     createProject: '新建项目',
     createOrganization: '新建组织',
+    createRequiresOfficial: '请先绑定 VintageStory 官方身份',
     mvl: '获取 MVL',
     submit: '发布',
     translations: '汉化计划',
@@ -105,6 +110,7 @@ const siteCopy = {
     settings: '设置',
     notifications: '消息提醒',
     favorites: '模组收藏',
+    follows: '我的关注',
     projects: '个人项目',
     organizations: '组织管理',
     admin: '后台管理',
@@ -130,6 +136,7 @@ const siteCopy = {
     submitOptions: 'Publish options',
     createProject: 'New project',
     createOrganization: 'New organization',
+    createRequiresOfficial: 'Link an official Vintage Story identity first',
     mvl: 'Get MVL',
     submit: 'Publish',
     translations: 'Translation project',
@@ -145,6 +152,7 @@ const siteCopy = {
     settings: 'Settings',
     notifications: 'Notifications',
     favorites: 'Favorite mods',
+    follows: 'Following',
     projects: 'Personal projects',
     organizations: 'Organization management',
     admin: 'Admin panel',
@@ -157,6 +165,7 @@ type HomeShellProps = {
   initialLanguage?: SiteLanguage;
   initialNightMode?: boolean;
   initialSessionAccount?: SessionAccountSummary | null;
+  showDevelopmentNotice?: boolean;
 };
 
 type SessionAccount = SessionAccountSummary;
@@ -165,7 +174,8 @@ export function HomeShell({
   children,
   initialLanguage = 'zh-CN',
   initialNightMode = false,
-  initialSessionAccount = null
+  initialSessionAccount = null,
+  showDevelopmentNotice = false
 }: HomeShellProps) {
   const [isExploreOpen, setIsExploreOpen] = useState(false);
   const [isSubmitOpen, setIsSubmitOpen] = useState(false);
@@ -178,7 +188,10 @@ export function HomeShell({
   const [authProvider, setAuthProvider] = useState<AuthProvider | null>(null);
   const [communityReady, setCommunityReady] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [shellNotice, setShellNotice] = useState('');
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
+  const [isCreateOrganizationOpen, setIsCreateOrganizationOpen] = useState(false);
+  const [isDevelopmentNoticeOpen, setIsDevelopmentNoticeOpen] = useState(showDevelopmentNotice);
   const exploreRef = useRef<HTMLDivElement>(null);
   const submitRef = useRef<HTMLDivElement>(null);
   const languageRef = useRef<HTMLDivElement>(null);
@@ -312,7 +325,8 @@ export function HomeShell({
 
   async function signOut() {
     setIsAccountOpen(false);
-    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
+    const csrf = await ensureCsrfToken();
+    await fetch('/api/auth/logout', { method: 'POST', headers: csrf ? { 'x-csrf-token': decodeURIComponent(csrf) } : undefined }).catch(() => undefined);
     setSessionAccount(null);
   }
 
@@ -367,13 +381,14 @@ export function HomeShell({
                       role="menuitem"
                       onClick={() => {
                         setIsSubmitOpen(false);
-                        setIsCreateProjectOpen(true);
+                        if (sessionAccount.hasOfficialIdentity) setIsCreateProjectOpen(true);
+                        else setShellNotice(text.createRequiresOfficial);
                         setIsMenuOpen(false);
                         setIsAccountOpen(false);
                       }}
                     >
                       <Box size={18} strokeWidth={2} aria-hidden="true" />
-                      <span>{text.createProject}</span>
+                      <span>{text.createProject}{!sessionAccount.hasOfficialIdentity ? ` · ${text.createRequiresOfficial}` : ''}</span>
                     </button>
                     <button
                       className="explore-item"
@@ -381,11 +396,13 @@ export function HomeShell({
                       role="menuitem"
                       onClick={() => {
                         setIsSubmitOpen(false);
+                        if (sessionAccount.hasOfficialIdentity) setIsCreateOrganizationOpen(true);
+                        else setShellNotice(text.createRequiresOfficial);
                         setIsMenuOpen(false);
                       }}
                     >
                       <Building2 size={18} strokeWidth={2} aria-hidden="true" />
-                      <span>{text.createOrganization}</span>
+                      <span>{text.createOrganization}{!sessionAccount.hasOfficialIdentity ? ` · ${text.createRequiresOfficial}` : ''}</span>
                     </button>
                   </div>
                 </div>
@@ -496,27 +513,31 @@ export function HomeShell({
                     <House size={16} strokeWidth={1.8} aria-hidden="true" />
                     <span>{text.personalHome}</span>
                   </a>
-                  <button className="account-menu__item" type="button" role="menuitem">
+                  <a className="account-menu__item" href="/settings" role="menuitem" onClick={() => setIsAccountOpen(false)}>
                     <Settings size={16} strokeWidth={1.8} aria-hidden="true" />
                     <span>{text.settings}</span>
-                  </button>
-                  <button className="account-menu__item" type="button" role="menuitem">
+                  </a>
+                  <a className="account-menu__item" href="/notifications" role="menuitem" onClick={() => setIsAccountOpen(false)}>
                     <Bell size={16} strokeWidth={1.8} aria-hidden="true" />
                     <span>{text.notifications}</span>
-                  </button>
-                  <button className="account-menu__item" type="button" role="menuitem">
+                  </a>
+                  <a className="account-menu__item" href="/favorites" role="menuitem" onClick={() => setIsAccountOpen(false)}>
                     <Heart size={16} strokeWidth={1.8} aria-hidden="true" />
                     <span>{text.favorites}</span>
-                  </button>
-                  <button className="account-menu__item" type="button" role="menuitem">
+                  </a>
+                  <a className="account-menu__item" href="/follows" role="menuitem" onClick={() => setIsAccountOpen(false)}>
+                    <Bell size={16} strokeWidth={1.8} aria-hidden="true" />
+                    <span>{text.follows}</span>
+                  </a>
+                  <a className="account-menu__item" href="/projects" role="menuitem" onClick={() => setIsAccountOpen(false)}>
                     <FolderKanban size={16} strokeWidth={1.8} aria-hidden="true" />
                     <span>{text.projects}</span>
-                  </button>
-                  <button className="account-menu__item" type="button" role="menuitem">
+                  </a>
+                  <a className="account-menu__item" href="/organizations" role="menuitem" onClick={() => setIsAccountOpen(false)}>
                     <UsersRound size={16} strokeWidth={1.8} aria-hidden="true" />
                     <span>{text.organizations}</span>
-                  </button>
-                  {sessionAccount.provider === 'community' && sessionAccount.isAdmin ? (
+                  </a>
+                  {sessionAccount.isAdmin ? (
                     <a
                       className="account-menu__item"
                       href="/admin"
@@ -643,6 +664,7 @@ export function HomeShell({
       </header>
 
       <main>
+        {shellNotice ? <p className="site-shell__notice" role="status" onClick={() => setShellNotice('')}>{shellNotice}</p> : null}
         {pageContent ?? (
           <section className="hero" aria-labelledby="hero-title">
             <div className="hero__inner">
@@ -695,10 +717,16 @@ export function HomeShell({
         <CreateProjectModal
           username={sessionAccount?.username ?? sessionAccount?.displayName ?? ''}
           avatarUrl={sessionAccount?.avatarUrl}
-          organizations={sessionAccount?.organizations ?? []}
+          organizations={sessionAccount?.organizationDetails ?? sessionAccount?.organizations ?? []}
+          onContinue={(draft) => {
+            saveProjectDraft(draft);
+            window.location.assign('/submit');
+          }}
           onClose={() => setIsCreateProjectOpen(false)}
         />
       ) : null}
+      {isCreateOrganizationOpen ? <CreateOrganizationModal onClose={() => setIsCreateOrganizationOpen(false)} onCreated={(organization) => { window.location.href = `/organization/${encodeURIComponent(organization.slug)}/manage`; }} /> : null}
+      {isDevelopmentNoticeOpen ? <DevelopmentNoticeModal language={language} onClose={() => setIsDevelopmentNoticeOpen(false)} /> : null}
       </div>
     </SiteLanguageContext.Provider>
   );

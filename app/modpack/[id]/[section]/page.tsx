@@ -1,13 +1,16 @@
 import { notFound } from 'next/navigation';
 import { ContentPreviewPage } from '@/components/ContentPreviewPage';
 import { HomeShell } from '@/components/HomeShell';
+import { getServerSessionAccountSummary } from '@/lib/auth-server';
+import { readableProjectPage } from '@/lib/page-access';
 import { getSitePreferences } from '@/lib/site-preferences';
 import { isPreviewSection } from '@/lib/preview-sections';
 
 export default async function ModpackPreviewSectionRoute({ params }: { params: Promise<{ id: string; section: string }> }) {
-  const [{ id, section }, preferences] = await Promise.all([params, getSitePreferences()]);
+  const [{ id, section }, preferences, account] = await Promise.all([params, getSitePreferences(), getServerSessionAccountSummary()]);
 
   if (!isPreviewSection(section) || section === 'description') notFound();
+  if ((await readableProjectPage(id, 'MODPACK', account)).access === 'not-found') notFound();
 
   return (
     <HomeShell

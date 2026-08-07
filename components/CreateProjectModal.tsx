@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  CheckCircle2,
   ChevronDown,
   Link2,
   Package,
@@ -10,16 +9,18 @@ import {
 } from 'lucide-react';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
+import type { ProjectDraft, ProjectDraftType, ProjectDraftVisibility } from '@/lib/project-draft';
 
-type ProjectType = 'mod' | 'modpack' | 'theme-pack' | 'server';
+type ProjectType = ProjectDraftType;
 type ProjectOwner = 'personal' | `organization:${string}`;
-type Visibility = 'public' | 'private';
+type Visibility = ProjectDraftVisibility;
 
 type CreateProjectModalProps = {
   username: string;
   avatarUrl?: string;
-  organizations: string[];
+  organizations: Array<string | { id?: string; slug?: string; name?: string; avatarUrl?: string }>;
   onClose: () => void;
+  onContinue: (draft: ProjectDraft) => void;
 };
 
 type LocalizedCopy = {
@@ -60,10 +61,7 @@ const copy = {
     overview: '概述',
     overviewPlaceholder: '用一两句话介绍这个项目。',
     cancel: '取消',
-    create: '创建项目',
-    createdTitle: '项目已创建',
-    createdDescription: '项目基本资料已保存，接下来可以添加版本、文件和详细介绍。',
-    done: '完成',
+    create: '继续投稿',
     projectTypeRequired: '请选择项目类型。'
   },
   en: {
@@ -80,15 +78,12 @@ const copy = {
     overview: 'Overview',
     overviewPlaceholder: 'Describe this project in one or two sentences.',
     cancel: 'Cancel',
-    create: 'Create project',
-    createdTitle: 'Project created',
-    createdDescription: 'The project basics are saved. You can add releases, files, and detailed content next.',
-    done: 'Done',
+    create: 'Continue to submission',
     projectTypeRequired: 'Choose a project type.'
   }
 } as const;
 
-export function CreateProjectModal({ username, avatarUrl, organizations, onClose }: CreateProjectModalProps) {
+export function CreateProjectModal({ username, avatarUrl, organizations, onClose, onContinue }: CreateProjectModalProps) {
   const language = useSiteLanguage();
   const text = copy[language];
   const [projectType, setProjectType] = useState<ProjectType>('mod');
@@ -98,15 +93,20 @@ export function CreateProjectModal({ username, avatarUrl, organizations, onClose
   const [visibility, setVisibility] = useState<Visibility>('public');
   const [overview, setOverview] = useState('');
   const [error, setError] = useState('');
-  const [created, setCreated] = useState(false);
   const [isOwnerOpen, setIsOwnerOpen] = useState(false);
   const ownerMenuRef = useRef<HTMLDivElement>(null);
-  const organizationNames = [...new Set(organizations.map((organization) => organization.trim()).filter(Boolean))];
+  const organizationOptions = organizations.reduce<Array<{ value: string; label: string; avatarUrl?: string }>>((result, organization) => {
+    const value = typeof organization === 'string' ? organization.trim() : organization.slug ?? organization.id ?? organization.name ?? '';
+    const label = typeof organization === 'string' ? organization.trim() : organization.name ?? organization.slug ?? organization.id ?? '';
+    if (value && !result.some((item) => item.value === value)) result.push({ value, label, avatarUrl: typeof organization === 'string' ? undefined : organization.avatarUrl });
+    return result;
+  }, []);
   const ownerOptions: OwnerOption[] = [
     { value: 'personal', label: username, avatarUrl },
-    ...organizationNames.map((organization) => ({
-      value: `organization:${organization}` as ProjectOwner,
-      label: organization
+    ...organizationOptions.map((organization) => ({
+      value: `organization:${organization.value}` as ProjectOwner,
+      label: organization.label,
+      avatarUrl: organization.avatarUrl
     }))
   ];
   const selectedOwner = ownerOptions.find((option) => option.value === owner) ?? ownerOptions[0];
@@ -141,7 +141,15 @@ export function CreateProjectModal({ username, avatarUrl, organizations, onClose
       return;
     }
     setError('');
-    setCreated(true);
+    const ownerId = owner.startsWith('organization:') ? owner.slice('organization:'.length) : '';
+    onContinue({
+      type: projectType,
+      name: name.trim(),
+      slug: url.trim(),
+      summary: overview.trim(),
+      visibility,
+      owner: ownerId ? { type: 'organization', id: ownerId } : { type: 'personal' }
+    });
   }
 
   return (
@@ -155,15 +163,7 @@ export function CreateProjectModal({ username, avatarUrl, organizations, onClose
           <X size={19} strokeWidth={1.8} aria-hidden="true" />
         </button>
 
-        {created ? (
-          <div className="auth-modal__success create-project-success">
-            <CheckCircle2 size={32} strokeWidth={1.7} aria-hidden="true" />
-            <strong>{text.createdTitle}</strong>
-            <span>{text.createdDescription}</span>
-            <button className="auth-modal__primary" type="button" onClick={onClose}>{text.done}</button>
-          </div>
-        ) : (
-          <>
+        <>
             <div className="auth-modal__heading create-project-modal__heading">
               <h2 id="create-project-title">{text.title}</h2>
             </div>
@@ -277,8 +277,7 @@ export function CreateProjectModal({ username, avatarUrl, organizations, onClose
                 <button className="auth-modal__primary" type="submit"><PlusIcon /><span>{text.create}</span></button>
               </div>
             </form>
-          </>
-        )}
+        </>
       </section>
     </div>
   );

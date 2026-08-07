@@ -9,6 +9,7 @@ export default async function HomePage() {
       initialLanguage={preferences.language}
       initialNightMode={preferences.nightMode}
       initialSessionAccount={preferences.sessionAccount}
+      showDevelopmentNotice
     />
   );
 }
