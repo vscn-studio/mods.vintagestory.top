@@ -1570,6 +1570,21 @@ a:focus-visible {
   line-height: 1.5;
 }
 
+.preview-rich-content > :first-child { margin-top: 0; }
+.preview-rich-content > :last-child { margin-bottom: 0; }
+.preview-rich-content h1,
+.preview-rich-content h2,
+.preview-rich-content h3,
+.preview-rich-content h4 { color: var(--ink); line-height: 1.3; }
+.preview-rich-content a { color: var(--olive-deep); font-weight: 700; }
+.preview-rich-content img { display: block; max-width: 100%; height: auto; border-radius: 12px; }
+.preview-rich-content blockquote { margin: 1em 0; border-left: 3px solid var(--olive); padding-left: 14px; color: var(--muted); }
+.preview-rich-content pre { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--paper); }
+.preview-rich-content table { display: block; width: 100%; overflow-x: auto; border-collapse: collapse; }
+.preview-rich-content th,
+.preview-rich-content td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; }
+.preview-rich-content iframe { display: block; width: 100%; max-width: 100%; min-height: 260px; border: 0; border-radius: 12px; background: var(--paper); }
+
 .preview-tags {
   display: flex;
   min-width: 0;
@@ -6603,6 +6618,15 @@ summary:active {
 .management-rich-editor .tox .tox-statusbar,
 .management-rich-editor .tox .tox-edit-area::before {
   border-color: var(--line);
+}
+
+.management-rich-editor .tox .tox-edit-area iframe {
+  background: #fff;
+}
+
+.management-description-editor + .management-description-editor {
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
 }
 
 .management-release-file {

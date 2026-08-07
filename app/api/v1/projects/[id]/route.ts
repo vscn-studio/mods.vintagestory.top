@@ -5,6 +5,7 @@ import { jsonData, jsonError } from '@/lib/api-errors';
 import { canProjectPermission, canReadProject, effectiveProjectRole, getActiveActor, projectCapabilities } from '@/lib/authorization';
 import { auditProjectMutation, findProject, projectInclude, replaceProjectTaxonomy, serializeProject } from '@/lib/project-service';
 import { requireConfirmation } from '@/lib/admin-auth';
+import { sanitizeRichText } from '@/lib/rich-text';
 
 export const runtime = 'nodejs';
 
@@ -80,8 +81,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       ...(parsed.nameEn === undefined ? {} : { nameEn: parsed.nameEn }),
       ...(parsed.summary === undefined ? {} : { summary: parsed.summary }),
       ...(parsed.summaryEn === undefined ? {} : { summaryEn: parsed.summaryEn }),
-      ...(parsed.description === undefined ? {} : { description: parsed.description }),
-      ...(parsed.descriptionEn === undefined ? {} : { descriptionEn: parsed.descriptionEn }),
+      ...(parsed.description === undefined ? {} : { description: sanitizeRichText(parsed.description) }),
+      ...(parsed.descriptionEn === undefined ? {} : { descriptionEn: sanitizeRichText(parsed.descriptionEn) }),
       ...(parsed.visibility === undefined ? {} : { visibility: parsed.visibility === 'private' ? 'PRIVATE' : 'PUBLIC' }),
       ...(parsed.license === undefined ? {} : { license: parsed.license }),
       ...(parsed.repositoryUrl === undefined ? {} : { repositoryUrl: parsed.repositoryUrl }),

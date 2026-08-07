@@ -125,6 +125,8 @@ const copy = {
     name: '名称',
     summary: '简介',
     description: '详细介绍',
+    descriptionZh: '中文详细介绍',
+    descriptionEn: '英文详细介绍',
     visibility: '可见性',
     public: '公开',
     private: '私有',
@@ -176,6 +178,8 @@ const copy = {
     name: 'Name',
     summary: 'Summary',
     description: 'Description',
+    descriptionZh: 'Chinese description',
+    descriptionEn: 'English description',
     visibility: 'Visibility',
     public: 'Public',
     private: 'Private',
@@ -279,6 +283,9 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
   const [taxonomyEnvironments, setTaxonomyEnvironments] = useState<string[]>([]);
   const [releaseCompatibleVersions, setReleaseCompatibleVersions] = useState<string[]>([]);
   const [releaseFile, setReleaseFile] = useState<File | null>(null);
+  const [descriptionZh, setDescriptionZh] = useState('');
+  const [descriptionEn, setDescriptionEn] = useState('');
+  const [descriptionChanged, setDescriptionChanged] = useState({ zh: false, en: false });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -304,6 +311,9 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
     if (!project) return;
     setVisibility(project.visibility);
     setTaxonomyEnvironments([...new Set(project.environments.map((environment) => normalizeEnvironmentValue(environment.slug || environment.name)).filter(Boolean))]);
+    setDescriptionZh(project.description.zh);
+    setDescriptionEn(project.description.en);
+    setDescriptionChanged({ zh: false, en: false });
   }, [project]);
 
   async function updateProject(event: FormEvent<HTMLFormElement>) {
@@ -321,6 +331,7 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
       ...(has('name') ? { name: textValue('name') } : {}),
       ...(has('summary') ? { summary: textValue('summary') } : {}),
       ...(has('description') ? { description: String(form.get('description') ?? '') } : {}),
+      ...(has('descriptionEn') ? { descriptionEn: String(form.get('descriptionEn') ?? '') } : {}),
       ...(has('visibility') ? { visibility: textValue('visibility') } : {}),
       ...(has('license') ? { license: nullableValue('license') } : {}),
       ...(has('repositoryUrl') ? { repositoryUrl: nullableValue('repositoryUrl') } : {}),
@@ -790,7 +801,10 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
         {canUpdate && currentSection === 'description' ? <section className="management-panel">
           <div className="management-panel__heading"><div><h2>{text.descriptionSection}</h2><p>{text.descriptionDescription}</p></div></div>
           <form className="management-form management-form--panel" onSubmit={updateProject}>
-            <label className="management-field"><span>{text.description}</span><textarea name="description" defaultValue={project.description[localizedKey]} rows={16} maxLength={100000} /></label>
+            <input type="hidden" name="description" value={descriptionZh} disabled={!descriptionChanged.zh} />
+            <input type="hidden" name="descriptionEn" value={descriptionEn} disabled={!descriptionChanged.en} />
+            <div className="management-field management-description-editor"><span>{text.descriptionZh}</span><RichTextEditor value={descriptionZh} onChange={(value) => { setDescriptionZh(value); setDescriptionChanged((current) => ({ ...current, zh: true })); }} ariaLabel={text.descriptionZh} height={460} mode="full" /></div>
+            <div className="management-field management-description-editor"><span>{text.descriptionEn}</span><RichTextEditor value={descriptionEn} onChange={(value) => { setDescriptionEn(value); setDescriptionChanged((current) => ({ ...current, en: true })); }} ariaLabel={text.descriptionEn} height={460} mode="full" /></div>
             <div className="management-form__actions"><button className="management-button management-button--primary" type="submit"><Save size={16} />{saved ? text.saved : text.saveChanges}</button></div>
           </form>
         </section> : null}

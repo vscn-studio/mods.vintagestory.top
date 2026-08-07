@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { getDb } from '@/lib/db';
 import { writeAudit } from '@/lib/audit';
 import { sanitizeChangelog } from '@/lib/changelog';
+import { sanitizeRichText } from '@/lib/rich-text';
 
 export const projectInclude = {
   members: { include: { account: { select: { id: true, username: true, displayName: true, avatarUrl: true } } } },
@@ -148,7 +149,7 @@ export function serializeProject(project: FullProject, options?: { includePrivat
     type: project.type.toLowerCase().replace('_', '-'),
     name: { zh: project.name, en: project.nameEn ?? project.name },
     summary: { zh: project.summary, en: project.summaryEn ?? project.summary },
-    description: { zh: project.description ?? '', en: project.descriptionEn ?? project.description ?? '' },
+    description: { zh: sanitizeRichText(project.description), en: sanitizeRichText(project.descriptionEn ?? project.description) },
     iconUrl: project.iconUrl,
     visibility: project.visibility.toLowerCase(),
     status: project.status.toLowerCase(),

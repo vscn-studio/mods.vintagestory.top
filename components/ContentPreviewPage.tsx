@@ -496,7 +496,7 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
           </div>
           <div className="preview-hero__copy">
             <h1 id="preview-title">{name}</h1>
-            <p className="preview-description">{description}</p>
+            <div className="preview-description preview-rich-content" dangerouslySetInnerHTML={{ __html: description }} />
             <div className="preview-hero__meta-row">
               <dl className="preview-hero__stats">
                 <div>
