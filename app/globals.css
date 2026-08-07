@@ -6242,3 +6242,479 @@ summary:active {
     padding: 32px 20px;
   }
 }
+
+/* Project management workspace */
+.management-page {
+  padding: 40px 22px 80px;
+}
+
+.management-page__inner {
+  width: min(1200px, 100%);
+}
+
+.management-page__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 30px;
+}
+
+.management-page__eyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--olive-deep);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.management-page__heading h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.8rem;
+  line-height: 1.2;
+}
+
+.management-page__public-link {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.management-page__public-link:hover,
+.management-page__public-link:focus-visible {
+  color: var(--olive-deep);
+  outline: none;
+  text-decoration: underline;
+}
+
+.management-checklist {
+  margin-bottom: 32px;
+}
+
+.management-checklist__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.management-checklist__header h2,
+.management-panel__heading h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.12rem;
+  line-height: 1.3;
+}
+
+.management-checklist__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 9px;
+}
+
+.management-checklist__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.management-checklist__legend-item--required svg,
+.management-check--required h3 svg { color: #a54134; }
+.management-checklist__legend-item--warning svg,
+.management-check--warning h3 svg { color: #b4711f; }
+.management-checklist__legend-item--recommendation svg,
+.management-check--recommendation h3 svg { color: #78639a; }
+
+.management-icon-button {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--paper-bright);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 140ms ease;
+}
+
+.management-icon-button:hover,
+.management-icon-button:focus-visible {
+  border-color: color-mix(in srgb, var(--olive) 52%, var(--line));
+  background: var(--hover-surface);
+  color: var(--ink);
+  outline: none;
+}
+
+.management-icon-button:active { transform: scale(0.97); }
+.management-checklist__chevron { transition: transform 180ms ease; }
+.management-checklist__chevron--closed { transform: rotate(-90deg); }
+
+.management-checklist__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  padding-top: 14px;
+}
+
+.management-check {
+  display: flex;
+  min-height: 164px;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 15px;
+  background: var(--paper-bright);
+}
+
+.management-check--complete {
+  border-color: color-mix(in srgb, var(--olive) 34%, var(--line));
+  background: color-mix(in srgb, var(--olive) 5%, var(--paper-bright));
+}
+
+.management-check h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.management-check--complete h3 svg { color: var(--olive); }
+
+.management-check p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+
+.management-check__action {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 5px;
+  margin-top: auto;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--olive-deep);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.management-check__action:hover,
+.management-check__action:focus-visible {
+  color: var(--olive);
+  outline: none;
+  text-decoration: underline;
+}
+
+.management-workbench {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.management-sidebar {
+  position: sticky;
+  top: 22px;
+  min-width: 0;
+}
+
+.management-nav {
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px;
+  background: var(--paper-bright);
+}
+
+.management-nav__item {
+  display: flex;
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  border-radius: 7px;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: left;
+  transition: background-color 150ms ease, color 150ms ease, transform 140ms ease;
+}
+
+.management-nav__item:hover,
+.management-nav__item:focus-visible {
+  background: var(--hover-surface);
+  color: var(--ink);
+  outline: none;
+}
+
+.management-nav__item--active,
+.management-nav__item--active:hover,
+.management-nav__item--active:focus-visible {
+  background: color-mix(in srgb, var(--olive) 14%, transparent);
+  color: var(--ink);
+}
+
+.management-nav__item:active { transform: scale(0.98); }
+.management-workbench__content { min-width: 0; }
+
+.management-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: clamp(18px, 3vw, 28px);
+  background: var(--paper-bright);
+}
+
+.management-panel__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.management-panel__heading p,
+.management-subsection p,
+.management-danger-zone p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.management-form--panel {
+  max-width: 680px;
+  gap: 18px;
+}
+
+.management-field {
+  display: grid;
+  gap: 7px;
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-weight: 750;
+}
+
+.management-field input,
+.management-field textarea,
+.management-field select,
+.management-inline-form input,
+.management-inline-form select,
+.management-release__form input,
+.management-release__form textarea,
+.management-member-list select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 9px 11px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 500;
+  line-height: 1.35;
+  outline: none;
+  transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.management-field textarea,
+.management-release__form textarea { resize: vertical; }
+
+.management-field input[readonly] {
+  background: color-mix(in srgb, var(--paper) 76%, var(--hover-surface));
+  color: var(--muted);
+  cursor: default;
+}
+
+.management-field input:focus,
+.management-field textarea:focus,
+.management-field select:focus,
+.management-inline-form input:focus,
+.management-inline-form select:focus,
+.management-release__form input:focus,
+.management-release__form textarea:focus,
+.management-member-list select:focus {
+  border-color: var(--olive);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--olive) 17%, transparent);
+  background: var(--paper-bright);
+}
+
+.management-form__hint {
+  margin: -8px 0 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.management-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.management-button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 8px 12px;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+  line-height: 1.2;
+  text-decoration: none;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 140ms ease;
+}
+
+.management-button:hover,
+.management-button:focus-visible {
+  border-color: color-mix(in srgb, var(--olive) 55%, var(--line));
+  background: var(--hover-surface);
+  outline: none;
+}
+
+.management-button:active { transform: scale(0.98); }
+.management-button--primary { border-color: var(--olive); background: var(--olive); color: #ffffff; }
+.management-button--primary:hover,
+.management-button--primary:focus-visible { border-color: var(--olive-deep); background: var(--olive-deep); color: #ffffff; }
+.management-button--danger { border-color: color-mix(in srgb, #a54134 42%, var(--line)); color: #a54134; }
+.management-button--danger:hover,
+.management-button--danger:focus-visible { border-color: #a54134; background: color-mix(in srgb, #a54134 9%, var(--paper)); color: #92382d; }
+
+.management-subsection,
+.management-danger-zone {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 16px;
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+}
+
+.management-subsection h3,
+.management-danger-zone h3 { margin: 0; color: var(--ink); font-size: 0.92rem; }
+.management-subsection .management-inline-form { margin: 0; }
+.management-danger-zone { align-items: center; }
+
+.management-inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  margin: 0 0 22px;
+}
+
+.management-inline-form input { flex: 1 1 180px; }
+.management-inline-form select { width: auto; min-width: 132px; }
+.management-inline-form .auth-code-button { min-height: 40px; border-radius: 7px; }
+
+.management-release {
+  grid-template-columns: minmax(130px, 1fr) auto auto;
+  gap: 10px;
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 15px;
+  background: var(--paper);
+}
+
+.management-release + .management-release { margin-top: 10px; }
+.management-release__files { padding-left: 0; }
+.management-release__files li { padding-top: 6px; }
+.management-release__form { margin-top: 6px; }
+
+.management-screenshot-grid { max-width: none; }
+.management-screenshot { border-radius: 8px; padding: 9px; }
+.management-screenshot img { border-radius: 5px; }
+.management-member-list { max-width: none; }
+.management-member-list li { gap: 16px; }
+
+.management-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.management-stat-grid > div {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  background: var(--paper);
+}
+
+.management-stat-grid dt { color: var(--muted); font-size: 0.72rem; font-weight: 700; }
+.management-stat-grid dd { margin: 7px 0 0; color: var(--ink); font-size: 1.2rem; font-weight: 800; overflow-wrap: anywhere; }
+
+@media (max-width: 900px) {
+  .management-workbench { display: block; }
+  .management-sidebar { position: static; margin-bottom: 18px; }
+  .management-nav { display: flex; overflow-x: auto; padding: 6px; }
+  .management-nav__item { width: auto; flex: 0 0 auto; white-space: nowrap; }
+  .management-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 620px) {
+  .management-page { padding: 28px 16px 58px; }
+  .management-page__heading { align-items: stretch; flex-direction: column; }
+  .management-page__heading > .management-button { width: 100%; }
+  .management-checklist__header { gap: 12px; }
+  .management-checklist__grid { grid-template-columns: minmax(0, 1fr); }
+  .management-check { min-height: 0; }
+  .management-panel { padding: 18px; }
+  .management-subsection,
+  .management-danger-zone { grid-template-columns: 1fr; align-items: stretch; }
+  .management-danger-zone .management-button { width: 100%; }
+  .management-inline-form { align-items: stretch; }
+  .management-inline-form input,
+  .management-inline-form select,
+  .management-inline-form .auth-code-button,
+  .management-inline-form .management-button { width: 100%; }
+  .management-release { grid-template-columns: 1fr; }
+  .management-release > div { grid-column: auto; }
+  .management-release .auth-code-button { width: 100%; }
+  .management-stat-grid { grid-template-columns: 1fr 1fr; }
+}

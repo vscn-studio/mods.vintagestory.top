@@ -1,18 +1,32 @@
 'use client';
 
 import {
+  AlignLeft,
+  AlertTriangle,
   Archive,
   ArrowRightLeft,
+  BarChart3,
   Check,
+  CheckCircle2,
+  ChevronDown,
+  CircleDot,
+  ExternalLink,
   FilePenLine,
   FileUp,
   ImagePlus,
+  Images,
+  Info,
+  Lightbulb,
+  Link2,
   LoaderCircle,
   Save,
+  Scale,
   Send,
+  Tags,
   Trash2,
   Undo2,
-  UserPlus
+  UserPlus,
+  UsersRound
 } from 'lucide-react';
 import { type ChangeEvent, type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
@@ -48,6 +62,12 @@ type Viewer = {
   capabilities?: string[];
 };
 
+type TaxonomyItem = {
+  slug: string;
+  name: string;
+  nameEn: string;
+};
+
 type Project = {
   id: string;
   slug: string;
@@ -55,6 +75,15 @@ type Project = {
   summary: { zh: string; en: string };
   description: { zh: string; en: string };
   visibility: string;
+  status: string;
+  type: string;
+  license?: string | null;
+  links?: { repository?: string | null; issues?: string | null; wiki?: string | null; discord?: string | null; sponsor?: string | null };
+  tags: TaxonomyItem[];
+  categories: TaxonomyItem[];
+  gameVersions: string[];
+  environments: TaxonomyItem[];
+  stats: { downloads: number; followers: number; favorites: number; comments: number };
   releases: Release[];
   members: ProjectMember[];
   screenshots: Screenshot[];
@@ -124,7 +153,8 @@ const copy = {
     noFiles: '尚未上传文件。',
     noScreenshots: '尚未上传截图。',
     releaseImmutable: '此版本已进入审核或发布流程，不能再编辑文件。',
-    invitationSent: '邀请已发送，等待对方接受。'
+    invitationSent: '邀请已发送，等待对方接受。',
+    general: '通用', taxonomy: '标签与分类', descriptionSection: '描述', license: '许可证', gallery: '图库', links: '相关链接', analytics: '分析', navigation: '项目设置导航', checklist: '发布前检查单', checklistHide: '收起检查项', checklistShow: '显示检查项', required: '强制', warning: '警告', recommendation: '建议', complete: '已完成', projectInformation: '项目信息', projectUrl: '项目地址', urlImmutable: '项目地址创建后不可修改。', saveChanges: '保存更改', taxonomyDescription: '设置用于目录筛选和项目发现的标签、分类及兼容信息。', tags: '标签', categories: '分类', gameVersions: '游戏版本', descriptionDescription: '使用完整的项目说明，帮助玩家了解功能、安装方式与兼容性。', licenseDescription: '明确项目分发与使用条件。', linksDescription: '添加玩家、贡献者和维护者需要的外部链接。', repository: '代码仓库', issues: '问题追踪', wiki: '文档站点', discord: '社群链接', sponsor: '赞助链接', analyticsDescription: '公开项目的累计数据。', downloads: '下载', followers: '关注', favorites: '收藏', comments: '评论', checklistRelease: '上传一个版本', checklistReleaseDescription: '项目提交审核前至少需要有一个版本。', checklistDescription: '添加项目描述', checklistDescriptionDescription: '请提供能清晰说明项目目的与功能的详细介绍。', checklistLicense: '选择一个许可证', checklistLicenseDescription: '选择项目分发所使用的许可证。', checklistSummary: '扩充你的简介', checklistSummaryDescription: '建议至少使用 30 个字符，使简介完整且易于理解。', checklistGallery: '添加展示图', checklistGalleryDescription: '展示图能帮助玩家快速了解项目内容。', checklistLinks: '添加外部链接', checklistLinksDescription: '可添加代码仓库、问题追踪或社群地址。', openVersions: '前往版本', openDescription: '前往描述', openLicense: '前往许可证', openGallery: '前往图库', openLinks: '前往链接', noDescription: '尚未添加描述。', noLicense: '尚未选择许可证。', noLinks: '尚未添加外部链接。', archiveDescription: '归档后项目将不再显示在公开目录中。', ownerActions: '所有权操作'
   },
   en: {
     project: 'Project management',
@@ -171,7 +201,7 @@ const copy = {
     noFiles: 'No files uploaded.',
     noScreenshots: 'No screenshots uploaded.',
     releaseImmutable: 'This release is being reviewed or published and its files cannot be changed.',
-    invitationSent: 'Invitation sent. It will appear after the recipient accepts.'
+    invitationSent: 'Invitation sent. It will appear after the recipient accepts.', general: 'General', taxonomy: 'Tags & categories', descriptionSection: 'Description', license: 'License', gallery: 'Gallery', links: 'Links', analytics: 'Analytics', navigation: 'Project settings navigation', checklist: 'Publishing checklist', checklistHide: 'Hide checklist', checklistShow: 'Show checklist', required: 'Required', warning: 'Warning', recommendation: 'Recommendation', complete: 'Complete', projectInformation: 'Project information', projectUrl: 'Project URL', urlImmutable: 'The project URL cannot be changed after creation.', saveChanges: 'Save changes', taxonomyDescription: 'Configure tags, categories, and compatibility details used for discovery.', tags: 'Tags', categories: 'Categories', gameVersions: 'Game versions', descriptionDescription: 'Write a complete project description so players understand features, installation, and compatibility.', licenseDescription: 'Set the terms for distributing and using this project.', linksDescription: 'Add external resources for players, contributors, and maintainers.', repository: 'Repository', issues: 'Issue tracker', wiki: 'Documentation', discord: 'Community link', sponsor: 'Sponsor link', analyticsDescription: 'Public totals for this project.', downloads: 'Downloads', followers: 'Followers', favorites: 'Favorites', comments: 'Comments', checklistRelease: 'Upload a release', checklistReleaseDescription: 'A project needs at least one release before it can be submitted for review.', checklistDescription: 'Add a project description', checklistDescriptionDescription: 'Provide a detailed description of the project purpose and functionality.', checklistLicense: 'Choose a license', checklistLicenseDescription: 'Choose the license used to distribute this project.', checklistSummary: 'Expand your summary', checklistSummaryDescription: 'Use at least 30 characters so the summary is useful and clear.', checklistGallery: 'Add a showcase image', checklistGalleryDescription: 'A showcase image helps players understand the project at a glance.', checklistLinks: 'Add external links', checklistLinksDescription: 'Link a repository, issue tracker, or community space.', openVersions: 'Open releases', openDescription: 'Open description', openLicense: 'Open license', openGallery: 'Open gallery', openLinks: 'Open links', noDescription: 'No description has been added.', noLicense: 'No license has been selected.', noLinks: 'No external links have been added.', archiveDescription: 'Archived projects are removed from the public directory.', ownerActions: 'Ownership actions'
   }
 } as const;
 
@@ -204,6 +234,8 @@ function releaseCanEdit(status: string): boolean {
   return status === 'draft' || status === 'rejected';
 }
 
+type ProjectSection = 'general' | 'taxonomy' | 'description' | 'versions' | 'license' | 'gallery' | 'links' | 'members' | 'analytics';
+
 export function ProjectManagementPage({ id }: ProjectManagementProps) {
   const language = useSiteLanguage();
   const text = copy[language];
@@ -217,6 +249,8 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
   const [memberRole, setMemberRole] = useState('viewer');
   const [transferType, setTransferType] = useState<'personal' | 'organization'>('personal');
   const [transferTarget, setTransferTarget] = useState('');
+  const [activeSection, setActiveSection] = useState<ProjectSection>('general');
+  const [checklistOpen, setChecklistOpen] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -242,15 +276,33 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     setSaved(false);
+    setError('');
+    const has = (name: string) => form.has(name);
+    const textValue = (name: string) => String(form.get(name) ?? '').trim();
+    const nullableValue = (name: string) => {
+      const value = textValue(name);
+      return value || null;
+    };
+    const payload: Record<string, unknown> = {
+      ...(has('name') ? { name: textValue('name') } : {}),
+      ...(has('summary') ? { summary: textValue('summary') } : {}),
+      ...(has('description') ? { description: String(form.get('description') ?? '') } : {}),
+      ...(has('visibility') ? { visibility: textValue('visibility') } : {}),
+      ...(has('license') ? { license: nullableValue('license') } : {}),
+      ...(has('repositoryUrl') ? { repositoryUrl: nullableValue('repositoryUrl') } : {}),
+      ...(has('issueUrl') ? { issueUrl: nullableValue('issueUrl') } : {}),
+      ...(has('wikiUrl') ? { wikiUrl: nullableValue('wikiUrl') } : {}),
+      ...(has('discordUrl') ? { discordUrl: nullableValue('discordUrl') } : {}),
+      ...(has('sponsorUrl') ? { sponsorUrl: nullableValue('sponsorUrl') } : {}),
+      ...(has('tags') ? { tags: listValues(form.get('tags')) } : {}),
+      ...(has('categories') ? { categories: listValues(form.get('categories')) } : {}),
+      ...(has('gameVersions') ? { gameVersions: listValues(form.get('gameVersions')) } : {}),
+      ...(has('environments') ? { environments: listValues(form.get('environments')) } : {})
+    };
     const response = await fetch(`/api/v1/projects/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       headers: await mutationHeaders(true),
-      body: JSON.stringify({
-        name: form.get('name'),
-        summary: form.get('summary'),
-        description: form.get('description'),
-        visibility: form.get('visibility')
-      })
+      body: JSON.stringify(payload)
     });
     if (!response.ok) {
       setError(await responseError(response, text.error));
@@ -499,35 +551,146 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
   if (!canUpdate && !canManageMembers && !canManageReleases && !canArchive && !canTransfer) {
     return <ManagementError title={text.project} error={text.forbidden} />;
   }
+  const localizedKey = language === 'en' ? 'en' : 'zh';
+  const hasDescription = Boolean(project.description[localizedKey].trim());
+  const hasLicense = Boolean(project.license?.trim());
+  const hasLinks = Object.values(project.links ?? {}).some(Boolean);
+  const navItems = [
+    { id: 'general' as const, label: text.general, icon: Info, available: canUpdate },
+    { id: 'taxonomy' as const, label: text.taxonomy, icon: Tags, available: canUpdate },
+    { id: 'description' as const, label: text.descriptionSection, icon: AlignLeft, available: canUpdate },
+    { id: 'versions' as const, label: text.releases, icon: CircleDot, available: canManageReleases },
+    { id: 'license' as const, label: text.license, icon: Scale, available: canUpdate },
+    { id: 'gallery' as const, label: text.gallery, icon: Images, available: canUpdate },
+    { id: 'links' as const, label: text.links, icon: Link2, available: canUpdate },
+    { id: 'members' as const, label: text.members, icon: UsersRound, available: canManageMembers },
+    { id: 'analytics' as const, label: text.analytics, icon: BarChart3, available: true }
+  ].filter((item) => item.available);
+  const currentSection = navItems.some((item) => item.id === activeSection) ? activeSection : navItems[0]?.id ?? 'analytics';
+  const checklistItems = [
+    { id: 'release', tone: 'required' as const, title: text.checklistRelease, description: text.checklistReleaseDescription, done: project.releases.length > 0, section: 'versions' as ProjectSection, action: text.openVersions },
+    { id: 'description', tone: 'required' as const, title: text.checklistDescription, description: text.checklistDescriptionDescription, done: hasDescription, section: 'description' as ProjectSection, action: text.openDescription },
+    { id: 'license', tone: 'required' as const, title: text.checklistLicense, description: text.checklistLicenseDescription, done: hasLicense, section: 'license' as ProjectSection, action: text.openLicense },
+    { id: 'summary', tone: 'warning' as const, title: text.checklistSummary, description: text.checklistSummaryDescription, done: project.summary[localizedKey].trim().length >= 30, section: 'general' as ProjectSection, action: text.general },
+    { id: 'gallery', tone: 'recommendation' as const, title: text.checklistGallery, description: text.checklistGalleryDescription, done: project.screenshots.length > 0, section: 'gallery' as ProjectSection, action: text.openGallery },
+    { id: 'links', tone: 'recommendation' as const, title: text.checklistLinks, description: text.checklistLinksDescription, done: hasLinks, section: 'links' as ProjectSection, action: text.openLinks }
+  ];
 
   return (
     <section className="management-page">
       <div className="management-page__inner">
-        <header className="workspace-page__header">
-          <h1>{text.project}: {project.name[language === 'en' ? 'en' : 'zh']}</h1>
-          {canArchive ? <button className="admin-button admin-button--danger" type="button" onClick={() => void archiveProject()}>
+        <header className="management-page__heading">
+          <div>
+            <span className="management-page__eyebrow">{text.project}</span>
+            <h1>{project.name[localizedKey]}</h1>
+            <a className="management-page__public-link" href={project.type === 'modpack' ? `/modpack/${encodeURIComponent(project.slug)}` : `/mod/${encodeURIComponent(project.slug)}`}>
+              <ExternalLink size={15} />{project.slug}
+            </a>
+          </div>
+          {canArchive ? <button className="management-button management-button--danger" type="button" onClick={() => void archiveProject()}>
             <Archive size={16} />
             {text.archive}
           </button> : null}
         </header>
         {error ? <p className="auth-form__error" role="alert">{error}</p> : null}
 
-        {canUpdate ? <form className="management-form" onSubmit={updateProject}>
-          <Field label={text.name}><input name="name" defaultValue={project.name.zh} maxLength={120} required /></Field>
-          <Field label={text.summary}><input name="summary" defaultValue={project.summary.zh} maxLength={500} required /></Field>
-          <Field label={text.description}><textarea name="description" defaultValue={project.description.zh} rows={8} maxLength={100000} /></Field>
-          <label className="auth-field">
-            <span>{text.visibility}</span>
-            <select name="visibility" defaultValue={project.visibility}>
-              <option value="public">{text.public}</option>
-              <option value="private">{text.private}</option>
-            </select>
-          </label>
-          <button className="auth-modal__primary" type="submit"><Save size={16} />{saved ? text.saved : text.save}</button>
-        </form> : null}
+        <section className="management-checklist" aria-labelledby="management-checklist-title">
+          <div className="management-checklist__header">
+            <div>
+              <h2 id="management-checklist-title">{text.checklist}</h2>
+              <div className="management-checklist__legend" aria-label={text.checklist}>
+                <span className="management-checklist__legend-item management-checklist__legend-item--required"><CircleDot size={15} />{text.required}</span>
+                <span className="management-checklist__legend-item management-checklist__legend-item--warning"><AlertTriangle size={15} />{text.warning}</span>
+                <span className="management-checklist__legend-item management-checklist__legend-item--recommendation"><Lightbulb size={15} />{text.recommendation}</span>
+              </div>
+            </div>
+            <button className="management-icon-button" type="button" title={checklistOpen ? text.checklistHide : text.checklistShow} aria-label={checklistOpen ? text.checklistHide : text.checklistShow} aria-expanded={checklistOpen} onClick={() => setChecklistOpen((open) => !open)}><ChevronDown className={checklistOpen ? 'management-checklist__chevron' : 'management-checklist__chevron management-checklist__chevron--closed'} size={18} /></button>
+          </div>
+          {checklistOpen ? <div className="management-checklist__grid">
+            {checklistItems.map((item) => {
+              const StateIcon = item.done ? CheckCircle2 : item.tone === 'required' ? CircleDot : item.tone === 'warning' ? AlertTriangle : Lightbulb;
+              const sectionAvailable = navItems.some((navItem) => navItem.id === item.section);
+              return <article className={`management-check management-check--${item.tone}${item.done ? ' management-check--complete' : ''}`} key={item.id}>
+                <h3><StateIcon size={17} aria-hidden="true" />{item.title}</h3>
+                <p>{item.description}</p>
+                {sectionAvailable ? <button type="button" className="management-check__action" onClick={() => setActiveSection(item.section)}>{item.done ? text.complete : item.action}<ExternalLink size={14} aria-hidden="true" /></button> : null}
+              </article>;
+            })}
+          </div> : null}
+        </section>
 
-        {canManageMembers ? <section className="management-section">
-          <h2>{text.members}</h2>
+        <div className="management-workbench">
+          <aside className="management-sidebar">
+            <nav className="management-nav" aria-label={text.navigation}>
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const active = currentSection === item.id;
+                return <button className={active ? 'management-nav__item management-nav__item--active' : 'management-nav__item'} type="button" key={item.id} aria-current={active ? 'page' : undefined} onClick={() => setActiveSection(item.id)}><Icon size={18} aria-hidden="true" /><span>{item.label}</span></button>;
+              })}
+            </nav>
+          </aside>
+          <div className="management-workbench__content">
+
+        {canUpdate && currentSection === 'general' ? <section className="management-panel">
+          <div className="management-panel__heading"><div><h2>{text.projectInformation}</h2><p>{text.urlImmutable}</p></div></div>
+          <form className="management-form management-form--panel" onSubmit={updateProject}>
+            <label className="management-field"><span>{text.name}</span><input name="name" defaultValue={project.name[localizedKey]} maxLength={120} required /></label>
+            <label className="management-field"><span>{text.projectUrl}</span><input value={project.slug} readOnly aria-readonly="true" /></label>
+            <label className="management-field"><span>{text.summary}</span><textarea name="summary" defaultValue={project.summary[localizedKey]} rows={3} maxLength={500} required /></label>
+            <label className="management-field"><span>{text.visibility}</span><select name="visibility" defaultValue={project.visibility}><option value="public">{text.public}</option><option value="private">{text.private}</option></select></label>
+            <div className="management-form__actions"><button className="management-button management-button--primary" type="submit"><Save size={16} />{saved ? text.saved : text.saveChanges}</button></div>
+          </form>
+          {canTransfer ? <section className="management-subsection"><div><h3>{text.ownerActions}</h3><p>{text.transferTarget}</p></div><form className="management-inline-form" onSubmit={transferProject}><select value={transferType} onChange={(event) => setTransferType(event.target.value as 'personal' | 'organization')}><option value="personal">{text.personal}</option><option value="organization">{text.organization}</option></select><input value={transferTarget} onChange={(event) => setTransferTarget(event.target.value)} placeholder={text.transferTarget} maxLength={120} required /><button className="management-button" type="submit"><ArrowRightLeft size={16} />{text.transfer}</button></form></section> : null}
+          {canArchive ? <section className="management-danger-zone"><div><h3>{text.archive}</h3><p>{text.archiveDescription}</p></div><button className="management-button management-button--danger" type="button" onClick={() => void archiveProject()}><Archive size={16} />{text.archive}</button></section> : null}
+        </section> : null}
+
+        {canUpdate && currentSection === 'taxonomy' ? <section className="management-panel">
+          <div className="management-panel__heading"><div><h2>{text.taxonomy}</h2><p>{text.taxonomyDescription}</p></div></div>
+          <form className="management-form management-form--panel" onSubmit={updateProject}>
+            <label className="management-field"><span>{text.tags}</span><input name="tags" defaultValue={project.tags.map((item) => item.name).join(', ')} maxLength={600} /></label>
+            <label className="management-field"><span>{text.categories}</span><input name="categories" defaultValue={project.categories.map((item) => item.name).join(', ')} maxLength={600} /></label>
+            <label className="management-field"><span>{text.gameVersions}</span><input name="gameVersions" defaultValue={project.gameVersions.join(', ')} maxLength={600} /></label>
+            <label className="management-field"><span>{text.environments}</span><input name="environments" defaultValue={project.environments.map((item) => item.name).join(', ')} maxLength={600} /></label>
+            <p className="management-form__hint">{language === 'en' ? 'Separate multiple values with commas.' : '多个值请使用逗号分隔。'}</p>
+            <div className="management-form__actions"><button className="management-button management-button--primary" type="submit"><Save size={16} />{saved ? text.saved : text.saveChanges}</button></div>
+          </form>
+        </section> : null}
+
+        {canUpdate && currentSection === 'description' ? <section className="management-panel">
+          <div className="management-panel__heading"><div><h2>{text.descriptionSection}</h2><p>{text.descriptionDescription}</p></div></div>
+          <form className="management-form management-form--panel" onSubmit={updateProject}>
+            <label className="management-field"><span>{text.description}</span><textarea name="description" defaultValue={project.description[localizedKey]} rows={16} maxLength={100000} /></label>
+            <div className="management-form__actions"><button className="management-button management-button--primary" type="submit"><Save size={16} />{saved ? text.saved : text.saveChanges}</button></div>
+          </form>
+        </section> : null}
+
+        {canUpdate && currentSection === 'license' ? <section className="management-panel">
+          <div className="management-panel__heading"><div><h2>{text.license}</h2><p>{text.licenseDescription}</p></div></div>
+          <form className="management-form management-form--panel" onSubmit={updateProject}>
+            <label className="management-field"><span>{text.license}</span><input name="license" defaultValue={project.license ?? ''} maxLength={120} placeholder="MIT" /></label>
+            <div className="management-form__actions"><button className="management-button management-button--primary" type="submit"><Save size={16} />{saved ? text.saved : text.saveChanges}</button></div>
+          </form>
+        </section> : null}
+
+        {canUpdate && currentSection === 'links' ? <section className="management-panel">
+          <div className="management-panel__heading"><div><h2>{text.links}</h2><p>{text.linksDescription}</p></div></div>
+          <form className="management-form management-form--panel" onSubmit={updateProject}>
+            <label className="management-field"><span>{text.repository}</span><input name="repositoryUrl" type="url" defaultValue={project.links?.repository ?? ''} placeholder="https://" maxLength={2048} /></label>
+            <label className="management-field"><span>{text.issues}</span><input name="issueUrl" type="url" defaultValue={project.links?.issues ?? ''} placeholder="https://" maxLength={2048} /></label>
+            <label className="management-field"><span>{text.wiki}</span><input name="wikiUrl" type="url" defaultValue={project.links?.wiki ?? ''} placeholder="https://" maxLength={2048} /></label>
+            <label className="management-field"><span>{text.discord}</span><input name="discordUrl" type="url" defaultValue={project.links?.discord ?? ''} placeholder="https://" maxLength={2048} /></label>
+            <label className="management-field"><span>{text.sponsor}</span><input name="sponsorUrl" type="url" defaultValue={project.links?.sponsor ?? ''} placeholder="https://" maxLength={2048} /></label>
+            <div className="management-form__actions"><button className="management-button management-button--primary" type="submit"><Save size={16} />{saved ? text.saved : text.saveChanges}</button></div>
+          </form>
+        </section> : null}
+
+        {currentSection === 'analytics' ? <section className="management-panel">
+          <div className="management-panel__heading"><div><h2>{text.analytics}</h2><p>{text.analyticsDescription}</p></div></div>
+          <dl className="management-stat-grid"><div><dt>{text.downloads}</dt><dd>{project.stats.downloads.toLocaleString()}</dd></div><div><dt>{text.followers}</dt><dd>{project.stats.followers.toLocaleString()}</dd></div><div><dt>{text.favorites}</dt><dd>{project.stats.favorites.toLocaleString()}</dd></div><div><dt>{text.comments}</dt><dd>{project.stats.comments.toLocaleString()}</dd></div></dl>
+        </section> : null}
+
+        {canManageMembers && currentSection === 'members' ? <section className="management-panel">
+          <div className="management-panel__heading"><div><h2>{text.members}</h2><p>{language === 'en' ? 'Manage project roles and membership.' : '管理项目成员和角色。'}</p></div></div>
           <form className="management-inline-form" onSubmit={addMember}>
             <input value={memberUsername} onChange={(event) => setMemberUsername(event.target.value)} placeholder={text.username} maxLength={80} required />
             <select value={memberRole} onChange={(event) => setMemberRole(event.target.value)}>
@@ -558,8 +721,8 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
           </ul>
         </section> : null}
 
-        {canManageReleases ? <section className="management-section">
-          <h2>{text.releases}</h2>
+        {canManageReleases && currentSection === 'versions' ? <section className="management-panel">
+          <div className="management-panel__heading"><div><h2>{text.releases}</h2><p>{language === 'en' ? 'Create releases, upload files, and submit them for review.' : '创建版本、上传文件并提交审核。'}</p></div></div>
           <form className="management-inline-form" onSubmit={createRelease}>
             <input value={version} onChange={(event) => setVersion(event.target.value)} placeholder={text.version} maxLength={80} required />
             <input value={changelog} onChange={(event) => setChangelog(event.target.value)} placeholder={text.changelog} maxLength={100000} />
@@ -602,8 +765,8 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
           })}
         </section> : null}
 
-        {canUpdate ? <section className="management-section">
-          <h2>{text.screenshots}</h2>
+        {canUpdate && currentSection === 'gallery' ? <section className="management-panel">
+          <div className="management-panel__heading"><div><h2>{text.gallery}</h2><p>{language === 'en' ? 'Upload project screenshots and showcase media.' : '上传项目截图与展示媒体。'}</p></div></div>
           <form className="management-inline-form" onSubmit={uploadScreenshot}>
             <input type="file" name="file" accept="image/png,image/jpeg,image/webp" required />
             <input name="caption" placeholder={text.screenshotCaption} maxLength={500} />
@@ -622,17 +785,8 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
           ) : <p className="management-empty">{text.noScreenshots}</p>}
         </section> : null}
 
-        {canTransfer ? <section className="management-section">
-          <h2>{text.transfer}</h2>
-          <form className="management-inline-form" onSubmit={transferProject}>
-            <select value={transferType} onChange={(event) => setTransferType(event.target.value as 'personal' | 'organization')}>
-              <option value="personal">{text.personal}</option>
-              <option value="organization">{text.organization}</option>
-            </select>
-            <input value={transferTarget} onChange={(event) => setTransferTarget(event.target.value)} placeholder={text.transferTarget} maxLength={120} required />
-            <button className="auth-code-button" type="submit"><ArrowRightLeft size={16} />{text.transfer}</button>
-          </form>
-        </section> : null}
+          </div>
+        </div>
       </div>
     </section>
   );
