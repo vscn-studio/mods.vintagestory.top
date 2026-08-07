@@ -1,13 +1,19 @@
 'use client';
 
-import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, Clock3, Download, Grid2X2, Heart, List, LoaderCircle, Search } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Download, Grid2X2, HardDrive, Heart, List, LoaderCircle, Monitor, Search } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { FormEvent, useEffect, useRef, useState } from 'react';
+import { GameVersionPicker } from '@/components/GameVersionPicker';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
+import { normalizeGameVersionFilter } from '@/lib/game-versions';
 
 type ContentType = 'mods' | 'theme-pack' | 'modpacks' | 'server';
 type ViewMode = 'list' | 'grid';
+
+function normalizeEnvironmentFilter(value: string | null | undefined): string[] {
+  return [...new Set((value ?? '').split(',').map((item) => item.trim().toLowerCase()).filter(Boolean))];
+}
 
 const typeTabs: Array<{ id: ContentType; href: string; zh: string; en: string }> = [
   { id: 'mods', href: '/mods', zh: '模组', en: 'Mods' },
@@ -190,9 +196,9 @@ export function ContentBrowser() {
   const searchParams = useSearchParams();
   const activeType = getActiveType(pathname, searchParams.get('type'));
   const [query, setQuery] = useState(searchParams.get('q') ?? '');
-  const [gameVersion, setGameVersion] = useState(searchParams.get('gameVersion') ?? '');
+  const [gameVersions, setGameVersions] = useState(() => normalizeGameVersionFilter(searchParams.get('gameVersion')));
   const [category, setCategory] = useState(searchParams.get('category') ?? '');
-  const [environment, setEnvironment] = useState(searchParams.get('environment') ?? '');
+  const [environments, setEnvironments] = useState(() => normalizeEnvironmentFilter(searchParams.get('environment')));
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [sort, setSort] = useState(searchParams.get('sort') ?? 'updated');
   const [perPage, setPerPage] = useState(searchParams.get('pageSize') ?? '20');
@@ -203,11 +209,12 @@ export function ContentBrowser() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [reloadToken, setReloadToken] = useState(0);
-  const groups = [
-    { id: 'version', label: text.gameVersion, value: gameVersion, setValue: setGameVersion, param: 'gameVersion' },
-    { id: 'category', label: text.category, value: category, setValue: setCategory, param: 'category' },
-    { id: 'environment', label: text.environment, value: environment, setValue: setEnvironment, param: 'environment' }
+  const environmentOptions = [
+    { value: 'client', label: language === 'en' ? 'Client' : '客户端', icon: Monitor },
+    { value: 'server', label: language === 'en' ? 'Server' : '服务端', icon: HardDrive }
   ];
+  const gameVersionFilter = gameVersions.join(',');
+  const environmentFilter = environments.join(',');
   const sortOptions = [
     { value: 'relevance', label: text.sortRelevance },
     { value: 'downloads', label: text.sortDownloads },
@@ -224,7 +231,7 @@ export function ContentBrowser() {
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPage(1);
-    updateUrl({ q: query, gameVersion, category, environment, sort, pageSize: perPage, page: '1' });
+    updateUrl({ q: query, gameVersion: gameVersionFilter, category, environment: environmentFilter, sort, pageSize: perPage, page: '1' });
   }
 
   function updateUrl(values: Record<string, string>) {
@@ -239,9 +246,9 @@ export function ContentBrowser() {
     const controller = new AbortController();
     const params = new URLSearchParams({ type: activeType === 'modpacks' ? 'modpack' : activeType, sort: sort === 'relevance' ? 'updated' : sort, page: String(page), pageSize: perPage });
     if (query.trim()) params.set('q', query.trim());
-    if (gameVersion.trim()) params.set('gameVersion', gameVersion.trim());
+    if (gameVersionFilter) params.set('gameVersion', gameVersionFilter);
     if (category.trim()) params.set('category', category.trim());
-    if (environment.trim()) params.set('environment', environment.trim());
+    if (environmentFilter) params.set('environment', environmentFilter);
     setLoading(true);
     setLoadError('');
     fetch(`/api/v1/projects?${params.toString()}`, { cache: 'no-store', signal: controller.signal })
@@ -259,13 +266,13 @@ export function ContentBrowser() {
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, [activeType, category, environment, gameVersion, page, perPage, query, reloadToken, sort, text.loadError]);
+  }, [activeType, category, environmentFilter, gameVersionFilter, page, perPage, query, reloadToken, sort, text.loadError]);
 
   useEffect(() => {
     setQuery(searchParams.get('q') ?? '');
-    setGameVersion(searchParams.get('gameVersion') ?? '');
+    setGameVersions(normalizeGameVersionFilter(searchParams.get('gameVersion')));
     setCategory(searchParams.get('category') ?? '');
-    setEnvironment(searchParams.get('environment') ?? '');
+    setEnvironments(normalizeEnvironmentFilter(searchParams.get('environment')));
     setSort(searchParams.get('sort') ?? 'updated');
     setPerPage(searchParams.get('pageSize') ?? '20');
     setPage(Math.max(1, Number(searchParams.get('page') ?? '1') || 1));
@@ -287,6 +294,19 @@ export function ContentBrowser() {
     const bounded = Math.max(1, Math.min(totalPages, nextPage));
     setPage(bounded);
     updateUrl({ page: String(bounded) });
+  }
+
+  function changeGameVersions(versions: string[]) {
+    setGameVersions(versions);
+    setPage(1);
+    updateUrl({ gameVersion: versions.join(','), page: '1' });
+  }
+
+  function changeEnvironment(value: string) {
+    const next = environments.includes(value) ? environments.filter((item) => item !== value) : [...environments, value];
+    setEnvironments(next);
+    setPage(1);
+    updateUrl({ environment: next.join(','), page: '1' });
   }
 
   function formatDate(value: string): string {
@@ -311,24 +331,45 @@ export function ContentBrowser() {
 
         <div className="content-layout">
           <aside className="content-filters" aria-label={text.filters}>
-            {groups.map((group) => (
-              <details className="content-filter-group" key={group.id} open>
-                <summary>
-                  <span>{group.label}</span>
-                  <ChevronDown size={16} strokeWidth={1.8} aria-hidden="true" />
-                </summary>
-                <form className="content-filter-group__form" onSubmit={(event) => { event.preventDefault(); setPage(1); updateUrl({ [group.param]: group.value, page: '1' }); }}>
-                  <input
-                    type="search"
-                    value={group.value}
-                    onChange={(event) => group.setValue(event.target.value)}
-                    placeholder={text.filterPlaceholder}
-                    aria-label={group.label}
-                  />
-                  {group.value ? <button type="button" title={text.clearFilter} aria-label={`${text.clearFilter}: ${group.label}`} onClick={() => { group.setValue(''); setPage(1); updateUrl({ [group.param]: '', page: '1' }); }}>×</button> : null}
-                </form>
-              </details>
-            ))}
+            <details className="content-filter-group content-filter-group--versions content-filter-group--selected-values" open>
+              <summary>
+                <span className="content-filter-group__summary-title">{text.gameVersion}</span>
+                {gameVersions.length ? <span className="content-filter-group__selected-values">{gameVersions.map((version) => <span className="content-filter-group__selected-value" key={version}>{version}</span>)}</span> : null}
+                <ChevronDown size={16} strokeWidth={1.8} aria-hidden="true" />
+              </summary>
+              <form className="content-filter-group__form content-filter-group__form--versions" onSubmit={(event) => event.preventDefault()}>
+                <GameVersionPicker value={gameVersions} onChange={changeGameVersions} ariaLabel={text.gameVersion} />
+              </form>
+            </details>
+            <details className="content-filter-group content-filter-group--selected-values" open>
+              <summary>
+                <span className="content-filter-group__summary-title">{text.category}</span>
+                {category ? <span className="content-filter-group__selected-values"><span className="content-filter-group__selected-value">{category}</span></span> : null}
+                <ChevronDown size={16} strokeWidth={1.8} aria-hidden="true" />
+              </summary>
+            </details>
+            <details className="content-filter-group content-filter-group--selected-values" open>
+              <summary>
+                <span className="content-filter-group__summary-title">{text.environment}</span>
+                {environments.length ? <span className="content-filter-group__selected-values">{environmentOptions.filter((option) => environments.includes(option.value)).map((option) => <span className="content-filter-group__selected-value" key={option.value}>{option.label}</span>)}</span> : null}
+                <ChevronDown size={16} strokeWidth={1.8} aria-hidden="true" />
+              </summary>
+              <div className="content-filter-options">
+                {environmentOptions.map((option) => {
+                  const Icon = option.icon;
+                  const selected = environments.includes(option.value);
+                  return (
+                    <div className="content-filter-option" key={option.value}>
+                      <button className={selected ? 'content-filter-option__button content-filter-option__button--selected' : 'content-filter-option__button'} type="button" aria-pressed={selected} onClick={() => changeEnvironment(option.value)}>
+                        <span className="content-filter-option__icon"><Icon size={16} strokeWidth={2} aria-hidden="true" /></span>
+                        <span className="content-filter-option__label">{option.label}</span>
+                        <Check className="content-filter-option__check" size={16} strokeWidth={2} aria-hidden="true" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
           </aside>
 
           <section className="content-results" aria-label={text.title}>

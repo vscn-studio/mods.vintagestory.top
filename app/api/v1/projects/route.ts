@@ -6,6 +6,7 @@ import { jsonData, jsonError, parsePage } from '@/lib/api-errors';
 import { getSessionAccount } from '@/lib/auth-server';
 import { canProjectPermission, effectiveOrganizationRole, effectiveProjectRole, getActiveActor, getDatabaseActor, organizationRoleAllows, projectCapabilities } from '@/lib/authorization';
 import { auditProjectMutation, projectInclude, projectType, projectVisibility, replaceProjectTaxonomy, serializeProject, slugify } from '@/lib/project-service';
+import { normalizeGameVersionFilter } from '@/lib/game-versions';
 
 export const runtime = 'nodejs';
 
@@ -32,9 +33,15 @@ export async function GET(request: NextRequest) {
   const url = request.nextUrl;
   const query = (url.searchParams.get('q') ?? '').trim().slice(0, 120);
   const requestedType = projectType(url.searchParams.get('type'));
-  const gameVersion = (url.searchParams.get('gameVersion') ?? '').trim().slice(0, 40);
+  const gameVersions = normalizeGameVersionFilter(url.searchParams.get('gameVersion'));
   const category = (url.searchParams.get('category') ?? '').trim().slice(0, 80);
-  const environment = (url.searchParams.get('environment') ?? '').trim().slice(0, 80);
+  const environments = (url.searchParams.get('environment') ?? '').split(',').map((value) => value.trim().slice(0, 80)).filter(Boolean);
+  const environmentValues = [...new Set(environments.flatMap((environment) => {
+    const environmentKey = environment.toLowerCase();
+    if (environmentKey === 'client' || environment === '客户端') return ['client', '客户端'];
+    if (environmentKey === 'server' || environment === '服务端') return ['server', '服务端'];
+    return [environment];
+  }))];
   const sort = url.searchParams.get('sort') ?? 'updated';
   const mine = url.searchParams.get('mine') === 'true';
   const session = await getSessionAccount(request);
@@ -45,9 +52,9 @@ export async function GET(request: NextRequest) {
     { OR: [{ ownerOrganizationId: null }, { ownerOrganization: { is: { archivedAt: null } } }] }
   ];
   if (requestedType) filters.push({ type: requestedType });
-  if (gameVersion) filters.push({ gameVersions: { some: { gameVersion: { value: { contains: gameVersion, mode: 'insensitive' } } } } });
+  if (gameVersions.length) filters.push({ gameVersions: { some: { gameVersion: { value: { in: gameVersions } } } } });
   if (category) filters.push({ categories: { some: { category: { OR: [{ slug: category.toLowerCase() }, { name: { contains: category, mode: 'insensitive' } }, { nameEn: { contains: category, mode: 'insensitive' } }] } } } });
-  if (environment) filters.push({ environments: { some: { environment: { OR: [{ slug: environment.toLowerCase() }, { name: { contains: environment, mode: 'insensitive' } }, { nameEn: { contains: environment, mode: 'insensitive' } }] } } } });
+  if (environmentValues.length) filters.push({ environments: { some: { environment: { OR: environmentValues.flatMap((value) => [{ slug: value.toLowerCase() }, { name: { contains: value, mode: 'insensitive' } }, { nameEn: { contains: value, mode: 'insensitive' } }]) } } } });
   if (query) {
     filters.push({ OR: [
       { name: { contains: query, mode: 'insensitive' } },
