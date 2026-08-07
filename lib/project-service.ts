@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient, ProjectType, ProjectVisibility } from '@pris
 import { randomBytes } from 'node:crypto';
 import { getDb } from '@/lib/db';
 import { writeAudit } from '@/lib/audit';
+import { sanitizeChangelog } from '@/lib/changelog';
 
 export const projectInclude = {
   members: { include: { account: { select: { id: true, username: true, displayName: true, avatarUrl: true } } } },
@@ -168,7 +169,7 @@ export function serializeProject(project: FullProject, options?: { includePrivat
       .map((release) => ({
         id: release.id,
         version: release.version,
-        changelog: release.changelog,
+        changelog: sanitizeChangelog(release.changelog),
         status: release.status.toLowerCase(),
         compatibleVersions: Array.isArray(release.compatibleVersions) ? release.compatibleVersions : [],
         environments: Array.isArray(release.environments) ? release.environments : [],

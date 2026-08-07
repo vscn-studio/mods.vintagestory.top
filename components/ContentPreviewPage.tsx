@@ -282,7 +282,8 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
     'update', 'member.manage', 'transfer', 'archive', 'release.create', 'release.publish', 'file.manage'
   ].includes(capability)) ?? false;
   const members = current.members ?? [];
-  const compatibleVersions = current.compatibleVersions ?? current.gameVersions ?? [];
+  const releases = current.releases ?? [];
+  const compatibleVersions = [...new Set(releases.flatMap((release) => Array.isArray(release.compatibleVersions) ? release.compatibleVersions.filter((value): value is string => typeof value === 'string' && Boolean(value.trim())) : []))];
   const runtimeEnvironments = current.environments ?? [];
   const sidebarTags = current.tags ?? [];
   const license = typeof current.license === 'string' ? { zh: current.license, en: current.license } : current.license ?? { zh: '未指定', en: 'Unspecified' };
@@ -309,7 +310,6 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
     versions: `${basePath}/versions`
   };
   const screenshotCards = current.screenshots ?? [];
-  const releases = current.releases ?? [];
   const changelogEntries = releases.filter((release) => release.changelog).map((release) => ({ version: release.version, date: release.publishedAt ?? release.updatedAt, summary: release.changelog ?? '' }));
   const versionEntries = releases.filter((release) => release.status === 'published').map((release) => ({ version: release.version, game: Array.isArray(release.compatibleVersions) ? release.compatibleVersions.join(' · ') : '', published: release.publishedAt ?? release.updatedAt, updated: release.updatedAt, downloads: release.files.reduce((sum, file) => sum + file.downloads, 0).toLocaleString(), files: release.files }));
   const gameVersionOptions = [...new Set(releases.flatMap((release) => Array.isArray(release.compatibleVersions) ? release.compatibleVersions.filter((value): value is string => typeof value === 'string') : []))];
@@ -636,7 +636,7 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
                           <span>{text.download}</span>
                         </button>
                       </div>
-                      <p>{entry.summary}</p>
+                      <div className="preview-changelog-item__content" dangerouslySetInnerHTML={{ __html: entry.summary }} />
                     </article>
                   ))}
                 </div> : <p className="preview-empty-state">{text.noData}</p>}

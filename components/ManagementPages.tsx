@@ -30,9 +30,11 @@ import {
   UserPlus,
   UsersRound
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { type ChangeEvent, type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { ContentSelect, type ContentSelectOption } from '@/components/ContentSelect';
 import { GameVersionPicker } from '@/components/GameVersionPicker';
+import type { RichTextEditorProps } from '@/components/RichTextEditor';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
 import { ensureCsrfToken, requestConfirmation } from '@/lib/client-confirmation';
 
@@ -85,7 +87,6 @@ type Project = {
   links?: { repository?: string | null; issues?: string | null; wiki?: string | null; discord?: string | null; sponsor?: string | null };
   tags: TaxonomyItem[];
   categories: TaxonomyItem[];
-  gameVersions: string[];
   environments: TaxonomyItem[];
   stats: { downloads: number; followers: number; favorites: number; comments: number };
   releases: Release[];
@@ -249,6 +250,11 @@ function normalizeEnvironmentValue(value: string): string {
 
 type ProjectSection = 'general' | 'taxonomy' | 'description' | 'versions' | 'license' | 'gallery' | 'links' | 'members' | 'analytics';
 
+const RichTextEditor = dynamic<RichTextEditorProps>(() => import('@/components/RichTextEditor').then((module) => module.RichTextEditor), {
+  ssr: false,
+  loading: () => <div className="management-rich-editor__loading"><LoaderCircle size={16} />Loading editor…</div>
+});
+
 export function ProjectManagementPage({ id }: ProjectManagementProps) {
   const language = useSiteLanguage();
   const text = copy[language];
@@ -265,8 +271,9 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
   const [activeSection, setActiveSection] = useState<ProjectSection>('general');
   const [checklistOpen, setChecklistOpen] = useState(true);
   const [visibility, setVisibility] = useState('public');
-  const [taxonomyGameVersions, setTaxonomyGameVersions] = useState<string[]>([]);
   const [taxonomyEnvironments, setTaxonomyEnvironments] = useState<string[]>([]);
+  const [releaseCompatibleVersions, setReleaseCompatibleVersions] = useState<string[]>([]);
+  const [releaseFile, setReleaseFile] = useState<File | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -291,7 +298,6 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
   useEffect(() => {
     if (!project) return;
     setVisibility(project.visibility);
-    setTaxonomyGameVersions(project.gameVersions);
     setTaxonomyEnvironments([...new Set(project.environments.map((environment) => normalizeEnvironmentValue(environment.slug || environment.name)).filter(Boolean))]);
   }, [project]);
 
@@ -319,7 +325,6 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
       ...(has('sponsorUrl') ? { sponsorUrl: nullableValue('sponsorUrl') } : {}),
       ...(has('tags') ? { tags: listValues(form.get('tags')) } : {}),
       ...(has('categories') ? { categories: listValues(form.get('categories')) } : {}),
-      ...(has('gameVersions') ? { gameVersions: listValues(form.get('gameVersions')) } : {}),
       ...(has('environments') ? { environments: listValues(form.get('environments')) } : {})
     };
     const response = await fetch(`/api/v1/projects/${encodeURIComponent(id)}`, {
@@ -337,17 +342,41 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
 
   async function createRelease(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setError('');
     const response = await fetch(`/api/v1/projects/${encodeURIComponent(id)}/releases`, {
       method: 'POST',
       headers: await mutationHeaders(true),
-      body: JSON.stringify({ version, changelog })
+      body: JSON.stringify({ version, changelog, compatibleVersions: releaseCompatibleVersions })
     });
     if (!response.ok) {
       setError(await responseError(response, text.error));
       return;
     }
+    const payload = await response.json().catch(() => ({})) as { data?: { id?: string } };
+    const releaseId = payload.data?.id;
+    if (!releaseId) {
+      setError(text.error);
+      await load();
+      return;
+    }
+    if (releaseFile) {
+      const form = new FormData();
+      form.set('file', releaseFile);
+      const fileResponse = await fetch(`/api/v1/releases/${encodeURIComponent(releaseId)}/files`, {
+        method: 'POST',
+        headers: await mutationHeaders(),
+        body: form
+      });
+      if (!fileResponse.ok) {
+        setError(await responseError(fileResponse, text.error));
+        await load();
+        return;
+      }
+    }
     setVersion('');
     setChangelog('');
+    setReleaseCompatibleVersions([]);
+    setReleaseFile(null);
     await load();
   }
 
@@ -568,6 +597,8 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
   const capabilities = new Set(project.viewer?.capabilities ?? []);
   const canUpdate = capabilities.has('update');
   const canManageMembers = capabilities.has('member.manage');
+  const canCreateRelease = capabilities.has('release.create');
+  const canManageFiles = capabilities.has('file.manage');
   const canManageReleases = capabilities.has('release.create') || capabilities.has('file.manage') || capabilities.has('release.publish');
   const canArchive = capabilities.has('archive');
   const canTransfer = capabilities.has('transfer');
@@ -578,6 +609,7 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
   const hasDescription = Boolean(project.description[localizedKey].trim());
   const hasLicense = Boolean(project.license?.trim());
   const hasLinks = Object.values(project.links ?? {}).some(Boolean);
+  const releaseGameVersions = [...new Set(project.releases.flatMap((release) => release.compatibleVersions ?? []).filter((value): value is string => typeof value === 'string' && Boolean(value.trim())))];
   const visibilityOptions: ContentSelectOption[] = [
     { value: 'public', label: text.public },
     { value: 'private', label: text.private }
@@ -700,11 +732,6 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
               <label className="management-field"><span>{text.tags}</span><span className="game-version-picker__search management-taxonomy-search"><input name="tags" type="search" defaultValue={project.tags.map((item) => item.name).join(', ')} maxLength={600} /></span></label>
               <label className="management-field"><span>{text.categories}</span><span className="game-version-picker__search management-taxonomy-search"><input name="categories" type="search" defaultValue={project.categories.map((item) => item.name).join(', ')} maxLength={600} /></span></label>
               <div className="management-field">
-                <span>{text.gameVersions}</span>
-                <input type="hidden" name="gameVersions" value={taxonomyGameVersions.join(',')} />
-                <GameVersionPicker value={taxonomyGameVersions} onChange={setTaxonomyGameVersions} ariaLabel={text.gameVersions} />
-              </div>
-              <div className="management-field">
                 <span>{text.environments}</span>
                 <input type="hidden" name="environments" value={taxonomyEnvironments.join(',')} />
                 <div className="content-filter-options management-environment-options">
@@ -721,7 +748,7 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
             <aside className="preview-sidebar__section preview-compatibility-section management-compatibility-preview">
               <div className="preview-section__heading"><h2>{language === 'en' ? 'Compatibility' : '兼容性'}</h2></div>
               <dl className="preview-detail-list">
-                <div><dt>{text.gameVersions}</dt><dd><ul className="preview-sidebar-tags preview-sidebar-tags--compact" aria-label={text.gameVersions}>{taxonomyGameVersions.length ? taxonomyGameVersions.map((gameVersion) => <li key={gameVersion}>{gameVersion}</li>) : <li>{text.noData}</li>}</ul></dd></div>
+                <div><dt>{text.gameVersions}</dt><dd><ul className="preview-sidebar-tags preview-sidebar-tags--compact" aria-label={text.gameVersions}>{releaseGameVersions.length ? releaseGameVersions.map((gameVersion) => <li key={gameVersion}>{gameVersion}</li>) : <li>{text.noData}</li>}</ul></dd></div>
                 <div><dt>{text.environments}</dt><dd><ul className="preview-sidebar-tags preview-sidebar-tags--compact" aria-label={text.environments}>{taxonomyEnvironments.length ? taxonomyEnvironments.map((environment) => <li key={environment}>{environmentLabel(environment)}</li>) : <li>{text.noData}</li>}</ul></dd></div>
               </dl>
             </aside>
@@ -785,11 +812,16 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
 
         {canManageReleases && currentSection === 'versions' ? <section className="management-panel">
           <div className="management-panel__heading"><div><h2>{text.releases}</h2><p>{language === 'en' ? 'Create releases, upload files, and submit them for review.' : '创建版本、上传文件并提交审核。'}</p></div></div>
-          <form className="management-inline-form" onSubmit={createRelease}>
-            <input value={version} onChange={(event) => setVersion(event.target.value)} placeholder={text.version} maxLength={80} required />
-            <input value={changelog} onChange={(event) => setChangelog(event.target.value)} placeholder={text.changelog} maxLength={100000} />
-            <button className="auth-code-button" type="submit"><Send size={16} />{text.createRelease}</button>
-          </form>
+          {canCreateRelease ? <form className="management-form management-release-create-form" onSubmit={createRelease}>
+            <label className="management-field"><span>{text.version}</span><input value={version} onChange={(event) => setVersion(event.target.value)} placeholder="1.0.0" maxLength={80} required /></label>
+            <div className="management-field"><span>{text.changelog}</span><RichTextEditor value={changelog} onChange={setChangelog} ariaLabel={text.changelog} /></div>
+            <div className="management-field">
+              <span>{text.compatibleVersions}</span>
+              <GameVersionPicker value={releaseCompatibleVersions} onChange={setReleaseCompatibleVersions} ariaLabel={text.compatibleVersions} />
+            </div>
+            {canManageFiles ? <div className="management-field"><span>{text.upload}</span><label className="management-release-file"><FileUp size={17} aria-hidden="true" /><span>{releaseFile?.name ?? text.upload}</span><input type="file" onChange={(event) => setReleaseFile(event.target.files?.[0] ?? null)} required /></label></div> : null}
+            <div className="management-form__actions"><button className="management-button management-button--primary" type="submit"><Send size={16} />{text.createRelease}</button></div>
+          </form> : null}
           {project.releases.map((release) => {
             const editable = releaseCanEdit(release.status);
             const canEditRelease = editable && capabilities.has('release.create');

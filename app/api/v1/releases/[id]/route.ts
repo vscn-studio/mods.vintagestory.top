@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { actorOrResponse, mutationAllowed, optionalActor } from '@/lib/api-auth';
 import { jsonData, jsonError } from '@/lib/api-errors';
 import { canProjectPermission, canReadProject, effectiveProjectRole, getActiveActor } from '@/lib/authorization';
+import { sanitizeChangelog } from '@/lib/changelog';
 import { findProject } from '@/lib/project-service';
 import { writeAudit } from '@/lib/audit';
 import { canTransitionRelease } from '@/lib/release-state';
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest, { params }: Params) {
   const canSeeUnclean = Boolean(actor && canProjectPermission(actor, release.project as never, 'file.manage'));
   if (!readable) return jsonError('NOT_FOUND', '版本不存在。', 404, request);
   if (release.status !== 'PUBLISHED' && !member) return jsonError('NOT_FOUND', '版本不存在。', 404, request);
-  return jsonData({ id: release.id, projectId: release.projectId, version: release.version, changelog: release.changelog, status: release.status.toLowerCase(), compatibleVersions: release.compatibleVersions ?? [], environments: release.environments ?? [], publishedAt: release.publishedAt?.toISOString() ?? null, files: release.files.filter((file) => file.scanStatus === 'CLEAN' || canSeeUnclean).map((file) => ({ id: file.id, name: file.name, mimeType: file.mimeType, size: Number(file.size), sha256: file.sha256, scanStatus: file.scanStatus.toLowerCase(), downloads: file.downloads })) }, request);
+  return jsonData({ id: release.id, projectId: release.projectId, version: release.version, changelog: sanitizeChangelog(release.changelog), status: release.status.toLowerCase(), compatibleVersions: release.compatibleVersions ?? [], environments: release.environments ?? [], publishedAt: release.publishedAt?.toISOString() ?? null, files: release.files.filter((file) => file.scanStatus === 'CLEAN' || canSeeUnclean).map((file) => ({ id: file.id, name: file.name, mimeType: file.mimeType, size: Number(file.size), sha256: file.sha256, scanStatus: file.scanStatus.toLowerCase(), downloads: file.downloads })) }, request);
 }
 
 export async function PATCH(request: NextRequest, { params }: Params) {
@@ -43,9 +44,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   if (!['DRAFT', 'REJECTED'].includes(release.status)) return jsonError('CONFLICT', '待审核、已发布或已撤回的版本不能直接编辑。', 409, request);
   let input: z.infer<typeof updateSchema>;
   try { input = updateSchema.parse(await request.json()); } catch { return jsonError('VALIDATION_ERROR', '版本数据无效。', 422, request); }
-  const updated = await auth.db.release.update({ where: { id }, data: { ...(input.changelog === undefined ? {} : { changelog: input.changelog }), ...(input.compatibleVersions === undefined ? {} : { compatibleVersions: input.compatibleVersions }), ...(input.environments === undefined ? {} : { environments: input.environments }) }, include: { files: true } });
+  const updated = await auth.db.release.update({ where: { id }, data: { ...(input.changelog === undefined ? {} : { changelog: sanitizeChangelog(input.changelog) }), ...(input.compatibleVersions === undefined ? {} : { compatibleVersions: input.compatibleVersions }), ...(input.environments === undefined ? {} : { environments: input.environments }) }, include: { files: true } });
   await writeAudit(auth.db, request, { actorId: auth.actor.id, action: 'release.update', resourceType: 'release', resourceId: id, after: { changelog: updated.changelog } });
-  return jsonData({ id: updated.id, version: updated.version, status: updated.status.toLowerCase(), changelog: updated.changelog, compatibleVersions: updated.compatibleVersions, environments: updated.environments }, request);
+  return jsonData({ id: updated.id, version: updated.version, status: updated.status.toLowerCase(), changelog: sanitizeChangelog(updated.changelog), compatibleVersions: updated.compatibleVersions, environments: updated.environments }, request);
 }
 
 export async function DELETE(request: NextRequest, { params }: Params) {

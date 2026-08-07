@@ -6520,6 +6520,91 @@ summary:active {
   gap: 18px;
 }
 
+.management-release-create-form {
+  max-width: 780px;
+  margin-bottom: 26px;
+}
+
+.management-rich-editor__loading {
+  display: flex;
+  min-height: 300px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.management-rich-editor__loading svg {
+  animation: content-spin 900ms linear infinite;
+}
+
+.management-rich-editor .tox {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.management-rich-editor .tox .tox-editor-header,
+.management-rich-editor .tox .tox-toolbar-overlord,
+.management-rich-editor .tox .tox-toolbar,
+.management-rich-editor .tox .tox-toolbar__primary {
+  border-color: var(--line);
+  background: var(--paper-bright);
+  box-shadow: none;
+}
+
+.management-rich-editor .tox .tox-tbtn {
+  color: var(--ink);
+}
+
+.management-rich-editor .tox .tox-tbtn:hover,
+.management-rich-editor .tox .tox-tbtn:focus-visible,
+.management-rich-editor .tox .tox-tbtn--enabled,
+.management-rich-editor .tox .tox-mbtn:hover,
+.management-rich-editor .tox .tox-mbtn--active {
+  background: var(--hover-surface);
+}
+
+.management-rich-editor .tox .tox-statusbar,
+.management-rich-editor .tox .tox-edit-area::before {
+  border-color: var(--line);
+}
+
+.management-release-file {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 11px;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.management-release-file:hover,
+.management-release-file:focus-within {
+  border-color: color-mix(in srgb, var(--olive) 55%, var(--line));
+  background: var(--hover-surface);
+}
+
+.management-release-file input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .management-taxonomy-layout {
   display: grid;
   grid-template-columns: minmax(0, 680px) minmax(220px, 280px);
@@ -6733,6 +6818,24 @@ summary:active {
 .management-release__files { padding-left: 0; }
 .management-release__files li { padding-top: 6px; }
 .management-release__form { margin-top: 6px; }
+
+.preview-changelog-item__content {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.preview-changelog-item__content > :first-child { margin-top: 0; }
+.preview-changelog-item__content > :last-child { margin-bottom: 0; }
+.preview-changelog-item__content a { color: var(--olive-deep); }
+.preview-changelog-item__content pre {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--paper);
+  color: var(--ink);
+}
 
 .management-screenshot-grid { max-width: none; }
 .management-screenshot { border-radius: 8px; padding: 9px; }

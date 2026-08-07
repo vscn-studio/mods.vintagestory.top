@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { actorOrResponse, mutationAllowed, optionalActor } from '@/lib/api-auth';
 import { jsonData, jsonError } from '@/lib/api-errors';
 import { canProjectPermission, canReadProject, effectiveProjectRole, getActiveActor } from '@/lib/authorization';
+import { sanitizeChangelog } from '@/lib/changelog';
 import { findProject, serializeProject } from '@/lib/project-service';
 import { writeAudit } from '@/lib/audit';
 
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest, { params }: Params) {
   const releases = project.releases.filter((release) => canPrivate || release.status === 'PUBLISHED').map((release) => ({
     id: release.id,
     version: release.version,
-    changelog: release.changelog,
+    changelog: sanitizeChangelog(release.changelog),
     status: release.status.toLowerCase(),
     compatibleVersions: release.compatibleVersions ?? [],
     environments: release.environments ?? [],
@@ -51,10 +52,11 @@ export async function POST(request: NextRequest, { params }: Params) {
   let input: z.infer<typeof releaseSchema>;
   try { input = releaseSchema.parse(await request.json()); } catch (error) { return jsonError('VALIDATION_ERROR', '版本数据无效。', 422, request, error instanceof z.ZodError ? error.issues : undefined); }
   const version = input.version.replace(/^v/i, '');
+  const changelog = input.changelog === undefined ? undefined : sanitizeChangelog(input.changelog);
   if (await auth.db.release.findUnique({ where: { projectId_version: { projectId: project.id, version } }, select: { id: true } })) return jsonError('CONFLICT', '该版本号已经存在。', 409, request);
   let release;
   try {
-    release = await auth.db.release.create({ data: { projectId: project.id, version, changelog: input.changelog, compatibleVersions: input.compatibleVersions, environments: input.environments, createdById: auth.actor.id }, include: { files: true } });
+    release = await auth.db.release.create({ data: { projectId: project.id, version, changelog, compatibleVersions: input.compatibleVersions, environments: input.environments, createdById: auth.actor.id }, include: { files: true } });
   } catch (error) {
     if ((error as { code?: string }).code === 'P2002') return jsonError('CONFLICT', '该版本号已经存在。', 409, request);
     return jsonError('INTERNAL_ERROR', error instanceof Error ? error.message : '版本保存失败。', 503, request);
