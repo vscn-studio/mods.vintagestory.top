@@ -6298,6 +6298,10 @@ summary:active {
 
 .management-checklist {
   margin-bottom: 32px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: clamp(16px, 2.5vw, 24px);
+  background: var(--paper-bright);
 }
 
 .management-checklist__header {
@@ -6305,8 +6309,7 @@ summary:active {
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
-  padding: 0 0 14px;
-  border-bottom: 1px solid var(--line);
+  padding: 0;
 }
 
 .management-checklist__header h2,
@@ -6380,7 +6383,7 @@ summary:active {
   flex-direction: column;
   gap: 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 15px;
   background: var(--paper-bright);
 }
@@ -6449,7 +6452,7 @@ summary:active {
   display: grid;
   gap: 3px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 7px;
   background: var(--paper-bright);
 }
@@ -6461,7 +6464,7 @@ summary:active {
   align-items: center;
   gap: 9px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 12px;
   padding: 8px 10px;
   background: transparent;
   color: var(--muted);
@@ -6484,8 +6487,8 @@ summary:active {
 .management-nav__item--active,
 .management-nav__item--active:hover,
 .management-nav__item--active:focus-visible {
-  background: color-mix(in srgb, var(--olive) 14%, transparent);
-  color: var(--ink);
+  background: var(--olive);
+  color: #ffffff;
 }
 
 .management-nav__item:active { transform: scale(0.98); }
@@ -6493,7 +6496,7 @@ summary:active {
 
 .management-panel {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: clamp(18px, 3vw, 28px);
   background: var(--paper-bright);
 }
@@ -6641,7 +6644,7 @@ summary:active {
   width: 100%;
   min-height: 40px;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: 12px;
   padding: 9px 11px;
   background: var(--paper);
   color: var(--ink);
@@ -6748,7 +6751,7 @@ summary:active {
   justify-content: center;
   gap: 7px;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: 12px;
   padding: 8px 12px;
   background: var(--paper);
   color: var(--ink);
@@ -6802,14 +6805,14 @@ summary:active {
 
 .management-inline-form input { flex: 1 1 180px; }
 .management-inline-form select { width: auto; min-width: 132px; }
-.management-inline-form .auth-code-button { min-height: 40px; border-radius: 7px; }
+.management-inline-form .auth-code-button { min-height: 40px; border-radius: 12px; }
 
 .management-release {
   grid-template-columns: minmax(130px, 1fr) auto auto;
   gap: 10px;
   margin-top: 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 15px;
   background: var(--paper);
 }
@@ -6838,8 +6841,8 @@ summary:active {
 }
 
 .management-screenshot-grid { max-width: none; }
-.management-screenshot { border-radius: 8px; padding: 9px; }
-.management-screenshot img { border-radius: 5px; }
+.management-screenshot { border-radius: 12px; padding: 9px; }
+.management-screenshot img { border-radius: 12px; }
 .management-member-list { max-width: none; }
 .management-member-list li { gap: 16px; }
 
@@ -6853,7 +6856,7 @@ summary:active {
 .management-stat-grid > div {
   min-width: 0;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 16px;
   background: var(--paper);
 }
