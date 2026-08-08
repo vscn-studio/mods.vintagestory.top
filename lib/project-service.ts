@@ -149,7 +149,7 @@ export function serializeProject(project: FullProject, options?: { includePrivat
     type: project.type.toLowerCase().replace('_', '-'),
     name: { zh: project.name, en: project.nameEn ?? project.name },
     summary: { zh: project.summary, en: project.summaryEn ?? project.summary },
-    description: { zh: sanitizeRichText(project.description), en: sanitizeRichText(project.descriptionEn ?? project.description) },
+    description: { zh: sanitizeRichText(project.description), en: sanitizeRichText(project.description) },
     iconUrl: project.iconUrl,
     visibility: project.visibility.toLowerCase(),
     status: project.status.toLowerCase(),
@@ -197,7 +197,7 @@ export function serializeProfileProject(project: ProfileProject) {
     type: project.type.toLowerCase().replace('_', '-'),
     name: { zh: project.name, en: project.nameEn ?? project.name },
     summary: { zh: project.summary, en: project.summaryEn ?? project.summary },
-    description: { zh: project.description ?? '', en: project.descriptionEn ?? project.description ?? '' },
+    description: { zh: project.description ?? '', en: project.description ?? '' },
     iconUrl: project.iconUrl,
     tags: project.tags.map(({ tag }) => ({ slug: tag.slug, name: tag.name, nameEn: tag.nameEn ?? tag.name })),
     stats: {

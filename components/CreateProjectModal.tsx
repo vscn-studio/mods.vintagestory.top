@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  ChevronDown,
   Link2,
   Package,
   Plus,
@@ -214,7 +213,6 @@ export function CreateProjectModal({ username, avatarUrl, organizations, onClose
                     onClick={() => setIsOwnerOpen((open) => !open)}
                   >
                     <span className="content-select__value"><OwnerIdentity option={selectedOwner} /></span>
-                    <ChevronDown className={isOwnerOpen ? 'content-select__chevron content-select__chevron--up' : 'content-select__chevron'} size={15} strokeWidth={1.8} aria-hidden="true" />
                   </button>
                   <div
                     className={isOwnerOpen ? 'content-select-popover content-select-popover--open' : 'content-select-popover'}

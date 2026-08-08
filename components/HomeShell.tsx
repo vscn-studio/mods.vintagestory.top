@@ -5,7 +5,6 @@ import {
   Bell,
   Boxes,
   Building2,
-  ChevronDown,
   Compass,
   Download,
   FolderKanban,
@@ -495,7 +494,6 @@ export function HomeShell({
                     )}
                   </span>
                   <span className="account-toggle__name">{sessionAccount.displayName}</span>
-                  <ChevronDown className={isAccountOpen ? 'account-toggle__chevron account-toggle__chevron--up' : 'account-toggle__chevron'} size={15} strokeWidth={1.8} aria-hidden="true" />
                 </button>
 
                 <div
@@ -602,12 +600,6 @@ export function HomeShell({
               >
                 <Compass size={19} strokeWidth={2} aria-hidden="true" />
                 <span>{text.explore}</span>
-                <ChevronDown
-                  className={isExploreOpen ? 'chevron-icon chevron-icon--up' : 'chevron-icon'}
-                  size={17}
-                  strokeWidth={2}
-                  aria-hidden="true"
-                />
               </button>
 
               <div

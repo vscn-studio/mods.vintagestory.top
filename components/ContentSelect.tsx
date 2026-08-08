@@ -1,6 +1,5 @@
 'use client';
 
-import { ChevronDown } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 export type ContentSelectOption = {
@@ -52,7 +51,6 @@ export function ContentSelect({ className = '', label, ariaLabel, value, options
       >
         {label ? <span className="content-select__label">{label}</span> : null}
         <span className="content-select__value">{selectedOption?.label}</span>
-        <ChevronDown className={isOpen ? 'content-select__chevron content-select__chevron--up' : 'content-select__chevron'} size={15} strokeWidth={1.8} aria-hidden="true" />
       </button>
 
       <div

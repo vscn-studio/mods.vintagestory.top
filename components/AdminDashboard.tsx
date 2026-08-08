@@ -5,7 +5,6 @@ import {
   BellRing,
   Blocks,
   Braces,
-  ChevronDown,
   ChevronRight,
   Cloud,
   Code2,
@@ -358,7 +357,7 @@ function UpdatesView({ english, common }: { english: boolean; common: typeof cop
       <AdminPanel title={english ? 'Website version' : '网站版本'}>
         <div className="admin-version"><span className="admin-version__icon"><Gauge size={26} strokeWidth={2} /></span><div><span>VSCN Mod DB</span><strong>v0.1.0</strong><small>{english ? 'Current version is up to date' : '当前已是最新版本'}</small></div><StatusPill>{english ? 'Latest' : '最新'}</StatusPill></div>
       </AdminPanel>
-      <AdminPanel title={english ? 'Backup schedule' : '自动备份设置'} action={<QuietButton icon={Save} disabled title={common.unavailable}>{common.save}</QuietButton>}><div className="admin-setting-list"><Toggle label={english ? 'Database backups' : '数据库自动备份'} defaultChecked disabled /><Toggle label={english ? 'File index backups' : '文件索引自动备份'} defaultChecked disabled /></div><label className="admin-field admin-field--spaced"><span>{english ? 'Retention period' : '备份保留时间'}</span><span className="admin-select-wrap"><select defaultValue="30" disabled><option value="7">7 {english ? 'days' : '天'}</option><option value="30">30 {english ? 'days' : '天'}</option><option value="90">90 {english ? 'days' : '天'}</option></select><ChevronDown size={16} strokeWidth={2} aria-hidden="true" /></span></label></AdminPanel>
+      <AdminPanel title={english ? 'Backup schedule' : '自动备份设置'} action={<QuietButton icon={Save} disabled title={common.unavailable}>{common.save}</QuietButton>}><div className="admin-setting-list"><Toggle label={english ? 'Database backups' : '数据库自动备份'} defaultChecked disabled /><Toggle label={english ? 'File index backups' : '文件索引自动备份'} defaultChecked disabled /></div><label className="admin-field admin-field--spaced"><span>{english ? 'Retention period' : '备份保留时间'}</span><span className="admin-select-wrap"><select defaultValue="30" disabled><option value="7">7 {english ? 'days' : '天'}</option><option value="30">30 {english ? 'days' : '天'}</option><option value="90">90 {english ? 'days' : '天'}</option></select></span></label></AdminPanel>
       <AdminPanel title={english ? 'Data backups' : '数据备份'} action={<QuietButton icon={Database} primary disabled title={common.unavailable}>{english ? 'Create backup' : '立即备份'}</QuietButton>}>
         <p className="admin-table__empty">{common.unavailable}</p>
       </AdminPanel>

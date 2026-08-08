@@ -37,6 +37,7 @@ import { GameVersionPicker } from '@/components/GameVersionPicker';
 import type { RichTextEditorProps } from '@/components/RichTextEditor';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
 import { ensureCsrfToken, requestConfirmation } from '@/lib/client-confirmation';
+import { LICENSE_GROUPS } from '@/lib/licenses';
 
 type ProjectManagementProps = { id: string };
 
@@ -125,8 +126,6 @@ const copy = {
     name: '名称',
     summary: '简介',
     description: '详细介绍',
-    descriptionZh: '中文详细介绍',
-    descriptionEn: '英文详细介绍',
     visibility: '可见性',
     public: '公开',
     private: '私有',
@@ -165,7 +164,7 @@ const copy = {
     noData: '暂无数据',
     releaseImmutable: '此版本已进入审核或发布流程，不能再编辑文件。',
     invitationSent: '邀请已发送，等待对方接受。',
-    general: '通用', taxonomy: '标签与分类', descriptionSection: '描述', license: '许可证', gallery: '图库', links: '相关链接', analytics: '分析', navigation: '项目设置导航', checklist: '发布前检查单', checklistHide: '收起检查项', checklistShow: '显示检查项', required: '强制', warning: '警告', recommendation: '建议', complete: '已完成', projectInformation: '项目信息', projectUrl: '项目地址', urlImmutable: '项目地址创建后不可修改。', saveChanges: '保存更改', taxonomyDescription: '设置用于目录筛选和项目发现的标签、分类及兼容信息。', tags: '标签', categories: '分类', gameVersions: '游戏版本', descriptionDescription: '使用完整的项目说明，帮助玩家了解功能、安装方式与兼容性。', licenseDescription: '明确项目分发与使用条件。', linksDescription: '添加玩家、贡献者和维护者需要的外部链接。', repository: '代码仓库', issues: '问题追踪', wiki: '文档站点', discord: '社群链接', sponsor: '赞助链接', analyticsDescription: '公开项目的累计数据。', downloads: '下载', followers: '关注', favorites: '收藏', comments: '评论', checklistRelease: '上传一个版本', checklistReleaseDescription: '项目提交审核前至少需要有一个版本。', checklistDescription: '添加项目描述', checklistDescriptionDescription: '请提供能清晰说明项目目的与功能的详细介绍。', checklistLicense: '选择一个许可证', checklistLicenseDescription: '选择项目分发所使用的许可证。', checklistSummary: '扩充你的简介', checklistSummaryDescription: '建议至少使用 30 个字符，使简介完整且易于理解。', checklistIcon: '添加图标', checklistIconDescription: '添加独特、相关且引人注目的图标能让你的项目更具辨识度，并帮助其在众多内容中脱颖而出。', checklistGallery: '添加展示图', checklistGalleryDescription: '展示图能帮助玩家快速了解项目内容。', checklistLinks: '添加外部链接', checklistLinksDescription: '可添加代码仓库、问题追踪或社群地址。', checklistSubmitDescription: '您的项目仅对项目成员可见。必须经过管理员审核后才能发布。', openVersions: '前往版本', openDescription: '前往描述', openLicense: '前往许可证', openGallery: '前往图库', openLinks: '前往链接', noDescription: '尚未添加描述。', noLicense: '尚未选择许可证。', noLinks: '尚未添加外部链接。', archiveDescription: '归档后项目将不再显示在公开目录中。', ownerActions: '所有权操作'
+    general: '通用', taxonomy: '标签与分类', descriptionSection: '描述', license: '许可证', licenseEmpty: '未填写', gallery: '图库', links: '相关链接', analytics: '分析', navigation: '项目设置导航', checklist: '发布前检查单', checklistHide: '收起检查项', checklistShow: '显示检查项', required: '强制', warning: '警告', recommendation: '建议', complete: '已完成', projectInformation: '项目信息', projectUrl: '项目地址', urlImmutable: '项目地址创建后不可修改。', saveChanges: '保存更改', taxonomyDescription: '设置用于目录筛选和项目发现的标签、分类及兼容信息。', tags: '标签', categories: '分类', gameVersions: '游戏版本', descriptionDescription: '使用完整的项目说明，帮助玩家了解功能、安装方式与兼容性。', licenseDescription: '明确项目分发与使用条件。', linksDescription: '添加玩家、贡献者和维护者需要的外部链接。', repository: '代码仓库', issues: '问题追踪', wiki: '文档站点', discord: '社群链接', sponsor: '赞助链接', analyticsDescription: '公开项目的累计数据。', downloads: '下载', followers: '关注', favorites: '收藏', comments: '评论', checklistRelease: '上传一个版本', checklistReleaseDescription: '项目提交审核前至少需要有一个版本。', checklistDescription: '添加项目描述', checklistDescriptionDescription: '请提供能清晰说明项目目的与功能的详细介绍。', checklistLicense: '选择一个许可证', checklistLicenseDescription: '选择项目分发所使用的许可证。', checklistSummary: '扩充你的简介', checklistSummaryDescription: '建议至少使用 30 个字符，使简介完整且易于理解。', checklistIcon: '添加图标', checklistIconDescription: '添加独特、相关且引人注目的图标能让你的项目更具辨识度，并帮助其在众多内容中脱颖而出。', checklistGallery: '添加展示图', checklistGalleryDescription: '展示图能帮助玩家快速了解项目内容。', checklistLinks: '添加外部链接', checklistLinksDescription: '可添加代码仓库、问题追踪或社群地址。', checklistSubmitDescription: '您的项目仅对项目成员可见。必须经过管理员审核后才能发布。', openVersions: '前往版本', openDescription: '前往描述', openLicense: '前往许可证', openGallery: '前往图库', openLinks: '前往链接', noDescription: '尚未添加描述。', noLicense: '尚未选择许可证。', noLinks: '尚未添加外部链接。', archiveDescription: '归档后项目将不再显示在公开目录中。', ownerActions: '所有权操作'
   },
   en: {
     project: 'Project management',
@@ -178,8 +177,6 @@ const copy = {
     name: 'Name',
     summary: 'Summary',
     description: 'Description',
-    descriptionZh: 'Chinese description',
-    descriptionEn: 'English description',
     visibility: 'Visibility',
     public: 'Public',
     private: 'Private',
@@ -217,7 +214,7 @@ const copy = {
     noScreenshots: 'No screenshots uploaded.',
     noData: 'No data',
     releaseImmutable: 'This release is being reviewed or published and its files cannot be changed.',
-    invitationSent: 'Invitation sent. It will appear after the recipient accepts.', general: 'General', taxonomy: 'Tags & categories', descriptionSection: 'Description', license: 'License', gallery: 'Gallery', links: 'Links', analytics: 'Analytics', navigation: 'Project settings navigation', checklist: 'Publishing checklist', checklistHide: 'Hide checklist', checklistShow: 'Show checklist', required: 'Required', warning: 'Warning', recommendation: 'Recommendation', complete: 'Complete', projectInformation: 'Project information', projectUrl: 'Project URL', urlImmutable: 'The project URL cannot be changed after creation.', saveChanges: 'Save changes', taxonomyDescription: 'Configure tags, categories, and compatibility details used for discovery.', tags: 'Tags', categories: 'Categories', gameVersions: 'Game versions', descriptionDescription: 'Write a complete project description so players understand features, installation, and compatibility.', licenseDescription: 'Set the terms for distributing and using this project.', linksDescription: 'Add external resources for players, contributors, and maintainers.', repository: 'Repository', issues: 'Issue tracker', wiki: 'Documentation', discord: 'Community link', sponsor: 'Sponsor link', analyticsDescription: 'Public totals for this project.', downloads: 'Downloads', followers: 'Followers', favorites: 'Favorites', comments: 'Comments', checklistRelease: 'Upload a release', checklistReleaseDescription: 'A project needs at least one release before it can be submitted for review.', checklistDescription: 'Add a project description', checklistDescriptionDescription: 'Provide a detailed description of the project purpose and functionality.', checklistLicense: 'Choose a license', checklistLicenseDescription: 'Choose the license used to distribute this project.', checklistSummary: 'Expand your summary', checklistSummaryDescription: 'Use at least 30 characters so the summary is useful and clear.', checklistIcon: 'Add an icon', checklistIconDescription: 'A unique, relevant, and recognizable icon helps the project stand out and makes it easier to identify.', checklistGallery: 'Add a showcase image', checklistGalleryDescription: 'A showcase image helps players understand the project at a glance.', checklistLinks: 'Add external links', checklistLinksDescription: 'Link a repository, issue tracker, or community space.', checklistSubmitDescription: 'Your project is visible only to project members until an administrator approves it for publication.', openVersions: 'Open releases', openDescription: 'Open description', openLicense: 'Open license', openGallery: 'Open gallery', openLinks: 'Open links', noDescription: 'No description has been added.', noLicense: 'No license has been selected.', noLinks: 'No external links have been added.', archiveDescription: 'Archived projects are removed from the public directory.', ownerActions: 'Ownership actions'
+    invitationSent: 'Invitation sent. It will appear after the recipient accepts.', general: 'General', taxonomy: 'Tags & categories', descriptionSection: 'Description', license: 'License', licenseEmpty: 'Not specified', gallery: 'Gallery', links: 'Links', analytics: 'Analytics', navigation: 'Project settings navigation', checklist: 'Publishing checklist', checklistHide: 'Hide checklist', checklistShow: 'Show checklist', required: 'Required', warning: 'Warning', recommendation: 'Recommendation', complete: 'Complete', projectInformation: 'Project information', projectUrl: 'Project URL', urlImmutable: 'The project URL cannot be changed after creation.', saveChanges: 'Save changes', taxonomyDescription: 'Configure tags, categories, and compatibility details used for discovery.', tags: 'Tags', categories: 'Categories', gameVersions: 'Game versions', descriptionDescription: 'Write a complete project description so players understand features, installation, and compatibility.', licenseDescription: 'Set the terms for distributing and using this project.', linksDescription: 'Add external resources for players, contributors, and maintainers.', repository: 'Repository', issues: 'Issue tracker', wiki: 'Documentation', discord: 'Community link', sponsor: 'Sponsor link', analyticsDescription: 'Public totals for this project.', downloads: 'Downloads', followers: 'Followers', favorites: 'Favorites', comments: 'Comments', checklistRelease: 'Upload a release', checklistReleaseDescription: 'A project needs at least one release before it can be submitted for review.', checklistDescription: 'Add a project description', checklistDescriptionDescription: 'Provide a detailed description of the project purpose and functionality.', checklistLicense: 'Choose a license', checklistLicenseDescription: 'Choose the license used to distribute this project.', checklistSummary: 'Expand your summary', checklistSummaryDescription: 'Use at least 30 characters so the summary is useful and clear.', checklistIcon: 'Add an icon', checklistIconDescription: 'A unique, relevant, and recognizable icon helps the project stand out and makes it easier to identify.', checklistGallery: 'Add a showcase image', checklistGalleryDescription: 'A showcase image helps players understand the project at a glance.', checklistLinks: 'Add external links', checklistLinksDescription: 'Link a repository, issue tracker, or community space.', checklistSubmitDescription: 'Your project is visible only to project members until an administrator approves it for publication.', openVersions: 'Open releases', openDescription: 'Open description', openLicense: 'Open license', openGallery: 'Open gallery', openLinks: 'Open links', noDescription: 'No description has been added.', noLicense: 'No license has been selected.', noLinks: 'No external links have been added.', archiveDescription: 'Archived projects are removed from the public directory.', ownerActions: 'Ownership actions'
   }
 } as const;
 
@@ -283,9 +280,8 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
   const [taxonomyEnvironments, setTaxonomyEnvironments] = useState<string[]>([]);
   const [releaseCompatibleVersions, setReleaseCompatibleVersions] = useState<string[]>([]);
   const [releaseFile, setReleaseFile] = useState<File | null>(null);
-  const [descriptionZh, setDescriptionZh] = useState('');
-  const [descriptionEn, setDescriptionEn] = useState('');
-  const [descriptionChanged, setDescriptionChanged] = useState({ zh: false, en: false });
+  const [description, setDescription] = useState('');
+  const [descriptionChanged, setDescriptionChanged] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -311,9 +307,8 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
     if (!project) return;
     setVisibility(project.visibility);
     setTaxonomyEnvironments([...new Set(project.environments.map((environment) => normalizeEnvironmentValue(environment.slug || environment.name)).filter(Boolean))]);
-    setDescriptionZh(project.description.zh);
-    setDescriptionEn(project.description.en);
-    setDescriptionChanged({ zh: false, en: false });
+    setDescription(project.description.zh);
+    setDescriptionChanged(false);
   }, [project]);
 
   async function updateProject(event: FormEvent<HTMLFormElement>) {
@@ -331,7 +326,6 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
       ...(has('name') ? { name: textValue('name') } : {}),
       ...(has('summary') ? { summary: textValue('summary') } : {}),
       ...(has('description') ? { description: String(form.get('description') ?? '') } : {}),
-      ...(has('descriptionEn') ? { descriptionEn: String(form.get('descriptionEn') ?? '') } : {}),
       ...(has('visibility') ? { visibility: textValue('visibility') } : {}),
       ...(has('license') ? { license: nullableValue('license') } : {}),
       ...(has('repositoryUrl') ? { repositoryUrl: nullableValue('repositoryUrl') } : {}),
@@ -640,7 +634,7 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
     return <ManagementError title={text.project} error={text.forbidden} />;
   }
   const localizedKey = language === 'en' ? 'en' : 'zh';
-  const hasDescription = Boolean(project.description[localizedKey].trim());
+  const hasDescription = Boolean(project.description.zh.trim());
   const hasLicense = Boolean(project.license?.trim());
   const hasLinks = Object.values(project.links ?? {}).some(Boolean);
   const releaseGameVersions = [...new Set(project.releases.flatMap((release) => release.compatibleVersions ?? []).filter((value): value is string => typeof value === 'string' && Boolean(value.trim())))];
@@ -801,10 +795,8 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
         {canUpdate && currentSection === 'description' ? <section className="management-panel">
           <div className="management-panel__heading"><div><h2>{text.descriptionSection}</h2><p>{text.descriptionDescription}</p></div></div>
           <form className="management-form management-form--panel" onSubmit={updateProject}>
-            <input type="hidden" name="description" value={descriptionZh} disabled={!descriptionChanged.zh} />
-            <input type="hidden" name="descriptionEn" value={descriptionEn} disabled={!descriptionChanged.en} />
-            <div className="management-field management-description-editor"><span>{text.descriptionZh}</span><RichTextEditor value={descriptionZh} onChange={(value) => { setDescriptionZh(value); setDescriptionChanged((current) => ({ ...current, zh: true })); }} ariaLabel={text.descriptionZh} height={460} mode="full" /></div>
-            <div className="management-field management-description-editor"><span>{text.descriptionEn}</span><RichTextEditor value={descriptionEn} onChange={(value) => { setDescriptionEn(value); setDescriptionChanged((current) => ({ ...current, en: true })); }} ariaLabel={text.descriptionEn} height={460} mode="full" /></div>
+            <input type="hidden" name="description" value={description} disabled={!descriptionChanged} />
+            <div className="management-field management-description-editor"><span>{text.description}</span><RichTextEditor value={description} onChange={(value) => { setDescription(value); setDescriptionChanged(true); }} ariaLabel={text.description} height={460} mode="full" /></div>
             <div className="management-form__actions"><button className="management-button management-button--primary" type="submit"><Save size={16} />{saved ? text.saved : text.saveChanges}</button></div>
           </form>
         </section> : null}
@@ -812,7 +804,7 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
         {canUpdate && currentSection === 'license' ? <section className="management-panel">
           <div className="management-panel__heading"><div><h2>{text.license}</h2><p>{text.licenseDescription}</p></div></div>
           <form className="management-form management-form--panel" onSubmit={updateProject}>
-            <label className="management-field"><span>{text.license}</span><input name="license" defaultValue={project.license ?? ''} maxLength={120} placeholder="MIT" /></label>
+            <label className="management-field"><span>{text.license}</span><select className="management-license-select" name="license" defaultValue={project.license ?? ''}><option value="">{text.licenseEmpty}</option>{LICENSE_GROUPS.map((group) => <optgroup key={group.id} label={group.label[language]}>{group.options.map((license) => <option value={license.value} key={license.value}>{license.label} ({license.value})</option>)}</optgroup>)}</select></label>
             <div className="management-form__actions"><button className="management-button management-button--primary" type="submit"><Save size={16} />{saved ? text.saved : text.saveChanges}</button></div>
           </form>
         </section> : null}

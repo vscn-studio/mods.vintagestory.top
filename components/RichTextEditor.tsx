@@ -25,6 +25,8 @@ import 'tinymce/plugins/visualblocks';
 import 'tinymce/plugins/wordcount';
 import 'tinymce/skins/ui/oxide/skin.min.css';
 import 'tinymce/themes/silver';
+import 'tinymce-i18n/langs8/zh-CN';
+import { useSiteLanguage } from '@/components/SiteLanguageContext';
 import { bilibiliEmbedHtml } from '@/lib/bilibili';
 
 export type RichTextEditorProps = {
@@ -36,15 +38,19 @@ export type RichTextEditorProps = {
 };
 
 export function RichTextEditor({ value, onChange, ariaLabel, height = 340, mode = 'compact' }: RichTextEditorProps) {
+  const siteLanguage = useSiteLanguage();
+  const editorLanguage = siteLanguage === 'en' ? 'en' : 'zh-CN';
   const fullEditor = mode === 'full';
   return (
     <div className="management-rich-editor" aria-label={ariaLabel}>
       <Editor
+        key={editorLanguage}
         tinymceScriptSrc={[]}
         licenseKey="gpl"
         value={value}
         onEditorChange={onChange}
         init={{
+          language: editorLanguage,
           height,
           menubar: false,
           branding: false,

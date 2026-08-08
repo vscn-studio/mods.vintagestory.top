@@ -260,15 +260,6 @@ a:focus-visible {
   white-space: nowrap;
 }
 
-.account-toggle__chevron {
-  color: var(--muted);
-  transition: transform 150ms ease;
-}
-
-.account-toggle__chevron--up {
-  transform: rotate(180deg);
-}
-
 .account-popover {
   position: absolute;
   top: calc(100% + 12px);
@@ -471,14 +462,6 @@ a:focus-visible {
   border-color: transparent;
   background: transparent;
   color: var(--ink);
-}
-
-.chevron-icon {
-  transition: transform 160ms ease;
-}
-
-.chevron-icon--up {
-  transform: rotate(180deg);
 }
 
 .explore-menu {
@@ -1196,7 +1179,7 @@ a:focus-visible {
   gap: 8px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 3px 7px 3px 12px;
+  padding: 3px 12px;
   background: var(--paper-bright);
   color: var(--muted);
   cursor: pointer;
@@ -1222,16 +1205,6 @@ a:focus-visible {
 
 .content-select__value {
   color: var(--ink);
-}
-
-.content-select__chevron {
-  flex: 0 0 auto;
-  color: var(--muted);
-  transition: transform 150ms ease, color 150ms ease;
-}
-
-.content-select__chevron--up {
-  transform: rotate(180deg);
 }
 
 .content-select-popover {
@@ -1948,7 +1921,7 @@ a:focus-visible {
   gap: 8px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 3px 10px 3px 12px;
+  padding: 3px 12px;
   background: var(--paper-bright);
   color: var(--ink);
   cursor: pointer;
@@ -1975,17 +1948,6 @@ a:focus-visible {
   overflow: hidden;
   color: var(--ink);
   text-overflow: ellipsis;
-}
-
-.preview-version-filter__chevron {
-  flex: 0 0 auto;
-  margin-left: auto;
-  color: var(--muted);
-  transition: transform 150ms ease;
-}
-
-.preview-version-filter__chevron--up {
-  transform: rotate(180deg);
 }
 
 .preview-version-filter__menu {
@@ -2442,6 +2404,13 @@ a:focus-visible {
   color: var(--ink);
   font-size: 0.8rem;
   font-weight: 700;
+}
+
+.preview-license-link {
+  color: var(--olive-deep);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .preview-sidebar-tags {
@@ -3362,8 +3331,7 @@ a:focus-visible {
   }
 
   .header-submit-button__label,
-  .account-toggle__name,
-  .account-toggle__chevron {
+  .account-toggle__name {
     display: none;
   }
 
@@ -4662,16 +4630,6 @@ summary:active {
 
 .admin-select-wrap select {
   appearance: none;
-  padding-right: 38px;
-}
-
-.admin-select-wrap > svg {
-  position: absolute;
-  top: 50%;
-  right: 12px;
-  color: var(--muted);
-  pointer-events: none;
-  transform: translateY(-50%);
 }
 
 .admin-logo-preview {
@@ -5586,16 +5544,6 @@ summary:active {
 
 .submit-select-wrap select {
   appearance: none;
-  padding-right: 35px;
-}
-
-.submit-select-wrap > svg {
-  position: absolute;
-  top: 50%;
-  right: 11px;
-  color: var(--muted);
-  pointer-events: none;
-  transform: translateY(-50%);
 }
 
 .submit-input-with-icon > svg {
@@ -6624,11 +6572,6 @@ summary:active {
   background: #fff;
 }
 
-.management-description-editor + .management-description-editor {
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
-}
-
 .management-release-file {
   display: inline-flex;
   min-height: 42px;
@@ -6706,6 +6649,11 @@ summary:active {
   line-height: 1.35;
   outline: none;
   transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.management-license-select {
+  appearance: none;
+  background-image: none;
 }
 
 .management-field textarea,

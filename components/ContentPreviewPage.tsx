@@ -1,12 +1,13 @@
 'use client';
 
-import { BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, Coffee, Copy, Download, EllipsisVertical, Flag, GitBranch, Heart, MessageCircle, Pencil, Trash2, X } from 'lucide-react';
+import { BookOpen, Check, ChevronLeft, ChevronRight, Coffee, Copy, Download, EllipsisVertical, Flag, GitBranch, Heart, MessageCircle, Pencil, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
 import type { SessionAccountSummary } from '@/lib/auth-server';
 import { type PreviewSection } from '@/lib/preview-sections';
 import { ensureCsrfToken } from '@/lib/client-confirmation';
+import { getLicenseOption } from '@/lib/licenses';
 
 type ContentPreviewPageProps = {
   kind: 'mod' | 'modpack';
@@ -200,7 +201,7 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
           description: raw.description ?? { zh: '', en: '' },
           tags: (raw.tags ?? []).map((tag: { name: string; nameEn?: string }) => ({ zh: tag.name, en: tag.nameEn ?? tag.name })),
           environments: (raw.environments ?? []).map((environment: { name: string; nameEn?: string }) => ({ zh: environment.name, en: environment.nameEn ?? environment.name })),
-          license: typeof raw.license === 'string' ? { zh: raw.license, en: raw.license } : raw.license ?? { zh: '未指定', en: 'Unspecified' },
+          license: typeof raw.license === 'string' ? raw.license : null,
           published: { zh: raw.createdAt ?? '', en: raw.createdAt ?? '' },
           updated: { zh: raw.updatedAt ?? '', en: raw.updatedAt ?? '' }
         });
@@ -276,7 +277,7 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
     releases: []
   };
   const name = language === 'en' ? current.name.en : current.name.zh;
-  const description = language === 'en' ? current.description.en : current.description.zh;
+  const description = current.description.zh;
   const author = current.author ?? (current.authorType === 'organization' ? current.owner?.name : undefined) ?? '';
   const authorPath = current.authorType === 'user' ? `/user/${encodeURIComponent(current.authorId)}` : `/organization/${encodeURIComponent(current.authorId)}`;
   const canEditContent = current.viewer?.capabilities?.some((capability) => [
@@ -287,7 +288,8 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
   const compatibleVersions = [...new Set(releases.flatMap((release) => Array.isArray(release.compatibleVersions) ? release.compatibleVersions.filter((value): value is string => typeof value === 'string' && Boolean(value.trim())) : []))];
   const runtimeEnvironments = current.environments ?? [];
   const sidebarTags = current.tags ?? [];
-  const license = typeof current.license === 'string' ? { zh: current.license, en: current.license } : current.license ?? { zh: '未指定', en: 'Unspecified' };
+  const license = typeof current.license === 'string' ? current.license : '';
+  const licenseOption = getLicenseOption(license);
   const published = current.published ?? { zh: '', en: '' };
   const updated = current.updated ?? { zh: '', en: '' };
   const repositoryUrl = current.links?.repository ?? '';
@@ -445,7 +447,6 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
         >
           <span className="preview-version-filter__label">{text.gameVersionFilter}</span>
           <span className="preview-version-filter__value">{selectedVersionLabel}</span>
-          <ChevronDown className={isVersionFilterOpen ? 'preview-version-filter__chevron preview-version-filter__chevron--up' : 'preview-version-filter__chevron'} size={15} strokeWidth={1.8} aria-hidden="true" />
         </button>
         <div
           className={isVersionFilterOpen ? 'preview-version-filter__menu preview-version-filter__menu--open' : 'preview-version-filter__menu'}
@@ -591,7 +592,7 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
           <main className={activeSection === 'screenshots' || activeSection === 'versions' ? 'preview-main preview-main--flat' : 'preview-main'} id={`preview-panel-${activeSection}`} role="tabpanel" aria-label={sectionTabs.find((tab) => tab.id === activeSection)?.label}>
             {activeSection === 'description' ? (
               <section className="preview-section">
-                {description ? <p>{description}</p> : <p className="preview-empty-state">{text.noData}</p>}
+                {description ? <div className="preview-rich-content" dangerouslySetInnerHTML={{ __html: description }} /> : <p className="preview-empty-state">{text.noData}</p>}
                 <div className="preview-comments">
                   <div className="preview-section__heading"><h2>{language === 'en' ? 'Comments' : '评论'}</h2></div>
                   {comments.length ? <div className="preview-comments__list">{comments.map((comment) => {
@@ -815,7 +816,7 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
               <dl className="preview-detail-list preview-project-info">
                 <div>
                   <dt>{text.license}</dt>
-                  <dd>{language === 'en' ? license.en : license.zh}</dd>
+                  <dd>{license ? licenseOption ? <a className="preview-license-link" href={licenseOption.href} target="_blank" rel="noreferrer">{license}</a> : license : text.noData}</dd>
                 </div>
                 <div>
                   <dt>{text.published}</dt>
