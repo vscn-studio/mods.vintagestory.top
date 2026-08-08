@@ -816,7 +816,10 @@ export async function findBindingConflict(identity: PendingIdentity, bindEmail: 
         where: { bindEmail: { equals: bindEmail, mode: 'insensitive' } },
         include: { identities: true, siteRoles: true, organizationMemberships: { include: { organization: true } }, ownedOrganizations: true }
       });
-      const conflict = accounts.find((account) => !account.identities.some((item) => item.provider === providerEnum(identity.provider) && item.subject === identity.subject));
+      const provider = providerEnum(identity.provider);
+      const conflict = accounts.length > 1 || accounts.some((account) => account.identities.some((item) => item.provider === provider && item.subject !== identity.subject))
+        ? accounts[0]
+        : null;
       return conflict ? dbAccountToModAccount(conflict) : null;
     } catch {
       return null;
@@ -826,7 +829,8 @@ export async function findBindingConflict(identity: PendingIdentity, bindEmail: 
   return (
     accounts.find((account) => {
       if (!accountEmailMatches(account, bindEmail)) return false;
-      return !accountIdentities(account).some((item) => identityMatches(item, identity));
+      const matches = accountIdentities(account).filter((item) => item.provider === identity.provider);
+      return matches.some((item) => item.subject !== identity.subject) || accounts.filter((candidate) => accountEmailMatches(candidate, bindEmail)).length > 1;
     }) ?? null
   );
 }
@@ -982,8 +986,18 @@ export async function upsertModAccount(identity: PendingIdentity, bindEmail: str
   }
 
   const matchingAccounts = accounts.filter((account) => accountEmailMatches(account, bindEmail));
-  if (matchingAccounts.length > 0) {
+  if (matchingAccounts.length > 1 || matchingAccounts.some((account) => accountHasProviderIdentity(account, identity.provider))) {
     throw new AccountBindingConflictError(identity.provider);
+  }
+  if (matchingAccounts.length === 1) {
+    const target = matchingAccounts[0];
+    updateAccountIdentity(target, identity, now);
+    if (passwordHash && !target.passwordHash) {
+      target.passwordHash = passwordHash;
+      target.passwordSetAt = now;
+    }
+    await writeAccounts(accounts);
+    return target;
   }
 
   const account: ModAccount = {
@@ -1015,7 +1029,16 @@ async function upsertModAccountInDatabase(db: NonNullable<ReturnType<typeof getD
       return loadDbAccount(tx as NonNullable<ReturnType<typeof getDb>>, existingIdentity.accountId);
     }
     const matches = await tx.account.findMany({ where: { bindEmail: { equals: normalizedEmail, mode: 'insensitive' } }, include: { identities: true } });
-    if (matches.length > 0) throw new AccountBindingConflictError(identity.provider);
+    if (matches.length > 1 || matches.some((account) => account.identities.some((item) => item.provider === provider))) {
+      throw new AccountBindingConflictError(identity.provider);
+    }
+    if (matches.length === 1) {
+      await syncDbIdentity(tx as NonNullable<ReturnType<typeof getDb>>, matches[0].id, identity, now);
+      if (passwordHash) {
+        await tx.account.updateMany({ where: { id: matches[0].id, passwordHash: null }, data: { passwordHash, passwordSetAt: now } });
+      }
+      return loadDbAccount(tx as NonNullable<ReturnType<typeof getDb>>, matches[0].id);
+    }
     const base = safeUsername(identity.username ?? identity.playerName ?? identity.displayName);
     let username = base;
     for (let index = 2; index < 1000; index += 1) {
