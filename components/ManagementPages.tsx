@@ -842,7 +842,7 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
           <div className="management-panel__heading"><div><h2>{text.releases}</h2><p>{language === 'en' ? 'Create releases, upload files, and submit them for review.' : '创建版本、上传文件并提交审核。'}</p></div></div>
           {canCreateRelease ? <form className="management-form management-release-create-form" onSubmit={createRelease}>
             <div className="management-release-compatible-picker">
-              <GameVersionPicker value={releaseCompatibleVersions} onChange={setReleaseCompatibleVersions} ariaLabel={text.compatibleVersions} collapsible />
+              <GameVersionPicker value={releaseCompatibleVersions} onChange={setReleaseCompatibleVersions} ariaLabel={text.compatibleVersions} collapsible variant="tree" />
             </div>
             <label className="management-field"><span>{text.version}</span><input value={version} onChange={(event) => setVersion(event.target.value)} placeholder="1.0.0" maxLength={80} required /></label>
             <div className="management-field"><span>{text.changelog}</span><RichTextEditor value={changelog} onChange={setChangelog} ariaLabel={text.changelog} /></div>
