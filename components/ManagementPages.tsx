@@ -845,7 +845,7 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
             <div className="management-field"><span>{text.changelog}</span><RichTextEditor value={changelog} onChange={setChangelog} ariaLabel={text.changelog} /></div>
             <div className="management-field management-release-compatible-field">
               <span>{text.compatibleVersions}</span>
-              <GameVersionPicker value={releaseCompatibleVersions} onChange={setReleaseCompatibleVersions} ariaLabel={text.compatibleVersions} />
+              <GameVersionPicker value={releaseCompatibleVersions} onChange={setReleaseCompatibleVersions} ariaLabel={text.compatibleVersions} collapsible />
             </div>
             {canManageFiles ? <div className="management-field"><span>{text.upload}</span><label className="management-release-file"><FileUp size={17} aria-hidden="true" /><span>{releaseFile?.name ?? text.upload}</span><input type="file" onChange={(event) => setReleaseFile(event.target.files?.[0] ?? null)} required /></label></div> : null}
             <div className="management-form__actions"><button className="management-button management-button--primary" type="submit"><Send size={16} />{text.createRelease}</button></div>

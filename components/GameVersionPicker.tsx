@@ -1,7 +1,7 @@
 'use client';
 
-import { Check, LoaderCircle, RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Check, ListFilter, LoaderCircle, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
 import type { GameVersionOption } from '@/lib/game-versions';
 
@@ -9,6 +9,7 @@ type Props = {
   value: string[];
   onChange: (versions: string[]) => void;
   ariaLabel: string;
+  collapsible?: boolean;
 };
 
 const copy = {
@@ -23,7 +24,10 @@ const copy = {
     maximum: '最多选择 32 个游戏版本',
     searchPlaceholder: '筛选版本号',
     noMatches: '没有匹配的游戏版本',
-    allVersions: '列出所有版本'
+    allVersions: '列出所有版本',
+    selectPlaceholder: '选择兼容版本',
+    selectedPrefix: '已选择',
+    selectedSuffix: '个版本'
   },
   en: {
     loading: 'Loading game versions…',
@@ -36,19 +40,24 @@ const copy = {
     maximum: 'Select up to 32 game versions',
     searchPlaceholder: 'Filter versions',
     noMatches: 'No matching game versions',
-    allVersions: 'List all versions'
+    allVersions: 'List all versions',
+    selectPlaceholder: 'Select compatible versions',
+    selectedPrefix: 'Selected',
+    selectedSuffix: 'versions'
   }
 } as const;
 
-export function GameVersionPicker({ value, onChange, ariaLabel }: Props) {
+export function GameVersionPicker({ value, onChange, ariaLabel, collapsible = false }: Props) {
   const language = useSiteLanguage();
   const text = copy[language];
+  const pickerRef = useRef<HTMLDivElement>(null);
   const [options, setOptions] = useState<GameVersionOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const [query, setQuery] = useState('');
   const [showAllVersions, setShowAllVersions] = useState(false);
+  const [open, setOpen] = useState(!collapsible);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -70,6 +79,22 @@ export function GameVersionPicker({ value, onChange, ariaLabel }: Props) {
     return () => controller.abort();
   }, [reloadToken]);
 
+  useEffect(() => {
+    if (!collapsible || !open) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [collapsible, open]);
+
   const optionMap = useMemo(() => new Map(options.map((option) => [option.value, option])), [options]);
   const listedOptions = useMemo(() => [
     ...options,
@@ -84,6 +109,12 @@ export function GameVersionPicker({ value, onChange, ariaLabel }: Props) {
     });
   }, [listedOptions, query, showAllVersions, value]);
 
+  const selectedSummary = value.length === 0
+    ? text.selectPlaceholder
+    : value.length <= 2
+      ? value.join(' · ')
+      : `${value.slice(0, 2).join(' · ')} +${value.length - 2}`;
+
   const toggleVersion = useCallback((version: string) => {
     if (value.includes(version)) {
       onChange(value.filter((current) => current !== version));
@@ -92,8 +123,8 @@ export function GameVersionPicker({ value, onChange, ariaLabel }: Props) {
     if (value.length < 32) onChange([...value, version]);
   }, [onChange, value]);
 
-  return (
-    <div className="game-version-picker" role="group" aria-label={ariaLabel} aria-busy={loading}>
+  const pickerContent = (
+    <>
       <div className="game-version-picker__search">
         <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={text.searchPlaceholder} aria-label={text.searchPlaceholder} />
       </div>
@@ -103,7 +134,7 @@ export function GameVersionPicker({ value, onChange, ariaLabel }: Props) {
           const saved = 'saved' in option && option.saved;
           const disabled = !selected && value.length >= 32;
           return (
-            <button className={selected ? 'game-version-picker__option game-version-picker__option--selected' : 'game-version-picker__option'} key={option.value} type="button" disabled={disabled} title={disabled ? text.maximum : undefined} aria-pressed={selected} onClick={() => toggleVersion(option.value)}>
+            <button className={selected ? 'game-version-picker__option game-version-picker__option--selected' : 'game-version-picker__option'} key={option.value} type="button" role={collapsible ? 'option' : undefined} disabled={disabled} title={disabled ? text.maximum : undefined} aria-pressed={selected} aria-selected={collapsible ? selected : undefined} onClick={() => toggleVersion(option.value)}>
               <span className="game-version-picker__value">{option.value}</span>
               <span className={option.channel === 'unstable' ? 'game-version-picker__channel game-version-picker__channel--unstable' : 'game-version-picker__channel'}>{saved ? text.saved : option.channel === 'unstable' ? text.unstable : text.stable}</span>
               {option.latest ? <span className="game-version-picker__latest">{text.latest}</span> : null}
@@ -122,6 +153,20 @@ export function GameVersionPicker({ value, onChange, ariaLabel }: Props) {
         </button>
       </div>
       {failed ? <button className="game-version-picker__retry" type="button" title={text.retry} aria-label={text.retry} onClick={() => setReloadToken((current) => current + 1)}><RefreshCw size={15} /></button> : null}
+    </>
+  );
+
+  return (
+    <div ref={pickerRef} className={collapsible ? `game-version-picker game-version-picker--dropdown${open ? ' game-version-picker--open' : ''}` : 'game-version-picker'} role="group" aria-label={ariaLabel} aria-busy={loading}>
+      {collapsible ? (
+        <>
+          <button className="game-version-picker__trigger" type="button" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
+            <span className="game-version-picker__trigger-value"><ListFilter size={16} aria-hidden="true" /><span>{selectedSummary}</span></span>
+            {value.length > 0 ? <span className="game-version-picker__trigger-count">{text.selectedPrefix} {value.length} {text.selectedSuffix}</span> : null}
+          </button>
+          {open ? <div className="game-version-picker__popover" role="listbox" aria-label={ariaLabel}>{pickerContent}</div> : null}
+        </>
+      ) : pickerContent}
     </div>
   );
 }
