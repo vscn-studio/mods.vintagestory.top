@@ -1,0 +1,2 @@
+ALTER TABLE "Account" ADD COLUMN "passwordHash" VARCHAR(255);
+ALTER TABLE "Account" ADD COLUMN "passwordSetAt" TIMESTAMP(3);

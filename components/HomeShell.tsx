@@ -13,6 +13,7 @@ import {
   Languages,
   LogIn,
   LogOut,
+  Mail,
   Menu,
   Moon,
   Package,
@@ -103,6 +104,7 @@ const siteCopy = {
     authEntry: '登录入口',
     communityLogin: '社区登录',
     officialLogin: '官方登录',
+    emailLogin: '邮箱登录',
     accountMenu: '账户菜单',
     avatarAlt: '玩家头像',
     personalHome: '个人首页',
@@ -145,6 +147,7 @@ const siteCopy = {
     authEntry: 'Sign-in options',
     communityLogin: 'Community sign-in',
     officialLogin: 'Official sign-in',
+    emailLogin: 'Email sign-in',
     accountMenu: 'Account menu',
     avatarAlt: 'Player avatar',
     personalHome: 'Profile home',
@@ -687,6 +690,10 @@ export function HomeShell({
                     alt=""
                   />
                   <span className="auth-button__label">{text.officialLogin}</span>
+                </button>
+                <button className="auth-button auth-button--email" type="button" onClick={() => openAuth('email')}>
+                  <Mail className="auth-button__icon auth-button__icon--email" size={24} strokeWidth={1.8} aria-hidden="true" />
+                  <span className="auth-button__label">{text.emailLogin}</span>
                 </button>
               </div>
             </div>

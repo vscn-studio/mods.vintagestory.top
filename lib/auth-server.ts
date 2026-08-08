@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import type { NextRequest, NextResponse } from 'next/server';
 import type { Prisma, SiteRole as PrismaSiteRole } from '@prisma/client';
 import { getDb, databaseConfigured } from '@/lib/db';
+import { verifyPassword } from '@/lib/password';
 
 export type AuthProvider = 'official' | 'community';
 
@@ -32,6 +33,9 @@ export type ModAccount = PendingIdentity & {
   organizationDetails?: Array<{ id: string; slug: string; name: string; role: string }>;
   status?: 'ACTIVE' | 'SUSPENDED' | 'BANNED';
   siteRoles?: string[];
+  /** Stored-only fields. They are never included in account summaries. */
+  passwordHash?: string;
+  passwordSetAt?: string;
 };
 
 export type SessionAccountSummary = {
@@ -143,6 +147,7 @@ export function hasOfficialIdentity(account: ModAccount): boolean {
 }
 
 const PENDING_COOKIE = 'mod_pending_identity';
+const VERIFIED_BINDING_COOKIE = 'mod_verified_binding';
 const SESSION_COOKIE = 'mod_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
 const MIN_SESSION_SECRET_LENGTH = 32;
@@ -252,6 +257,33 @@ export function getPendingIdentity(request: NextRequest): PendingIdentity | null
 
 export function clearPendingIdentity(response: NextResponse): void {
   response.cookies.set(PENDING_COOKIE, '', cookieOptions(0));
+}
+
+type VerifiedBinding = {
+  provider: AuthProvider;
+  subject: string;
+  bindEmail: string;
+  expiresAt: number;
+};
+
+export function setVerifiedBinding(response: NextResponse, identity: PendingIdentity, bindEmail: string): void {
+  response.cookies.set(
+    VERIFIED_BINDING_COOKIE,
+    encrypt({ provider: identity.provider, subject: identity.subject, bindEmail, expiresAt: Date.now() + ACTIVATION_CODE_TTL_MS } satisfies VerifiedBinding),
+    cookieOptions(Math.ceil(ACTIVATION_CODE_TTL_MS / 1000))
+  );
+}
+
+export function getVerifiedBinding(request: NextRequest): VerifiedBinding | null {
+  const raw = request.cookies.get(VERIFIED_BINDING_COOKIE)?.value;
+  if (!raw) return null;
+  const value = decrypt<VerifiedBinding>(raw) ?? unseal<VerifiedBinding>(raw);
+  if (!value || !value.provider || !value.subject || !value.bindEmail || !Number.isFinite(value.expiresAt) || value.expiresAt <= Date.now()) return null;
+  return value;
+}
+
+export function clearVerifiedBinding(response: NextResponse): void {
+  response.cookies.set(VERIFIED_BINDING_COOKIE, '', cookieOptions(0));
 }
 
 export function setAccountSession(response: NextResponse, accountId: string): void {
@@ -784,7 +816,7 @@ export async function findBindingConflict(identity: PendingIdentity, bindEmail: 
         where: { bindEmail: { equals: bindEmail, mode: 'insensitive' } },
         include: { identities: true, siteRoles: true, organizationMemberships: { include: { organization: true } }, ownedOrganizations: true }
       });
-      const conflict = accounts.find((account) => account.identities.some((item) => item.provider === (identity.provider === 'official' ? 'OFFICIAL' : 'COMMUNITY') && item.subject !== identity.subject));
+      const conflict = accounts.find((account) => !account.identities.some((item) => item.provider === providerEnum(identity.provider) && item.subject === identity.subject));
       return conflict ? dbAccountToModAccount(conflict) : null;
     } catch {
       return null;
@@ -794,8 +826,7 @@ export async function findBindingConflict(identity: PendingIdentity, bindEmail: 
   return (
     accounts.find((account) => {
       if (!accountEmailMatches(account, bindEmail)) return false;
-      const existing = accountHasProviderIdentity(account, identity.provider);
-      return Boolean(existing && existing.subject !== identity.subject);
+      return !accountIdentities(account).some((item) => identityMatches(item, identity));
     }) ?? null
   );
 }
@@ -836,12 +867,7 @@ export async function authenticateIdentity(identity: PendingIdentity): Promise<I
   if (emailMatches.some((account) => accountHasProviderIdentity(account, identity.provider))) {
     return { status: 'provider-conflict', provider: identity.provider };
   }
-  if (emailMatches.length !== 1) return { status: 'needs-binding' };
-
-  const target = emailMatches[0];
-  updateAccountIdentity(target, identity, now);
-  await writeAccounts(accounts);
-  return { status: 'authenticated', account: target };
+  return { status: 'needs-binding' };
 }
 
 function safeUsername(value: string): string {
@@ -917,9 +943,7 @@ async function authenticateIdentityInDatabase(db: NonNullable<ReturnType<typeof 
     if (!providerEmail || (identity.provider === 'community' && identity.providerEmailVerified !== true)) return { status: 'needs-binding' };
     const emailMatches = await db.account.findMany({ where: { bindEmail: { equals: providerEmail, mode: 'insensitive' } }, include: { identities: true } });
     if (emailMatches.some((account) => account.identities.some((item) => item.provider === provider))) return { status: 'provider-conflict', provider: identity.provider };
-    if (emailMatches.length !== 1) return { status: 'needs-binding' };
-    await syncDbIdentity(db, emailMatches[0].id, identity, now);
-    return { status: 'authenticated', account: await loadDbAccount(db, emailMatches[0].id) };
+    return { status: 'needs-binding' };
   } catch {
     return { status: 'needs-binding' };
   }
@@ -941,36 +965,33 @@ async function writeJsonArray<T>(file: string, values: T[]): Promise<void> {
   }
 }
 
-export async function upsertModAccount(identity: PendingIdentity, bindEmail: string): Promise<ModAccount> {
+export async function upsertModAccount(identity: PendingIdentity, bindEmail: string, passwordHash?: string): Promise<ModAccount> {
   const db = getDb();
-  if (db) return upsertModAccountInDatabase(db, identity, bindEmail);
+  if (db) return upsertModAccountInDatabase(db, identity, bindEmail, passwordHash);
   const accounts = await readAccounts();
   const now = new Date().toISOString();
   const existing = accounts.find((account) => accountIdentities(account).some((item) => identityMatches(item, identity)));
   if (existing) {
     updateAccountIdentity(existing, identity, now);
+    if (passwordHash && !existing.passwordHash) {
+      existing.passwordHash = passwordHash;
+      existing.passwordSetAt = now;
+    }
     await writeAccounts(accounts);
     return existing;
   }
 
   const matchingAccounts = accounts.filter((account) => accountEmailMatches(account, bindEmail));
-  if (matchingAccounts.some((account) => accountHasProviderIdentity(account, identity.provider))) {
+  if (matchingAccounts.length > 0) {
     throw new AccountBindingConflictError(identity.provider);
-  }
-  if (matchingAccounts.length > 1) {
-    throw new AccountBindingConflictError(identity.provider);
-  }
-  if (matchingAccounts.length === 1) {
-    const target = matchingAccounts[0];
-    updateAccountIdentity(target, identity, now);
-    await writeAccounts(accounts);
-    return target;
   }
 
   const account: ModAccount = {
     ...identity,
     id: `mod_${randomBytes(12).toString('hex')}`,
     bindEmail,
+    passwordHash,
+    passwordSetAt: passwordHash ? now : undefined,
     createdAt: now,
     lastLoginAt: now
   };
@@ -979,7 +1000,7 @@ export async function upsertModAccount(identity: PendingIdentity, bindEmail: str
   return account;
 }
 
-async function upsertModAccountInDatabase(db: NonNullable<ReturnType<typeof getDb>>, identity: PendingIdentity, bindEmail: string): Promise<ModAccount> {
+async function upsertModAccountInDatabase(db: NonNullable<ReturnType<typeof getDb>>, identity: PendingIdentity, bindEmail: string, passwordHash?: string): Promise<ModAccount> {
   const normalizedEmail = normalizeEmail(bindEmail);
   if (!normalizedEmail) throw new Error('Invalid binding email');
   const provider = providerEnum(identity.provider);
@@ -988,14 +1009,13 @@ async function upsertModAccountInDatabase(db: NonNullable<ReturnType<typeof getD
     const existingIdentity = await tx.identity.findUnique({ where: { provider_subject: { provider, subject: identity.subject } } });
     if (existingIdentity) {
       await syncDbIdentity(tx as NonNullable<ReturnType<typeof getDb>>, existingIdentity.accountId, identity, now);
+      if (passwordHash) {
+        await tx.account.updateMany({ where: { id: existingIdentity.accountId, passwordHash: null }, data: { passwordHash, passwordSetAt: now } });
+      }
       return loadDbAccount(tx as NonNullable<ReturnType<typeof getDb>>, existingIdentity.accountId);
     }
     const matches = await tx.account.findMany({ where: { bindEmail: { equals: normalizedEmail, mode: 'insensitive' } }, include: { identities: true } });
-    if (matches.some((account) => account.identities.some((item) => item.provider === provider)) || matches.length > 1) throw new AccountBindingConflictError(identity.provider);
-    if (matches.length === 1) {
-      await syncDbIdentity(tx as NonNullable<ReturnType<typeof getDb>>, matches[0].id, identity, now);
-      return loadDbAccount(tx as NonNullable<ReturnType<typeof getDb>>, matches[0].id);
-    }
+    if (matches.length > 0) throw new AccountBindingConflictError(identity.provider);
     const base = safeUsername(identity.username ?? identity.playerName ?? identity.displayName);
     let username = base;
     for (let index = 2; index < 1000; index += 1) {
@@ -1009,6 +1029,8 @@ async function upsertModAccountInDatabase(db: NonNullable<ReturnType<typeof getD
         username,
         displayName: identity.displayName,
         bindEmail: normalizedEmail,
+        passwordHash,
+        passwordSetAt: passwordHash ? now : undefined,
         avatarUrl: identity.avatarUrl,
         lastLoginAt: now,
         identities: {
@@ -1030,4 +1052,37 @@ async function upsertModAccountInDatabase(db: NonNullable<ReturnType<typeof getD
     });
     return loadDbAccount(tx as NonNullable<ReturnType<typeof getDb>>, account.id);
   });
+}
+
+export async function authenticateEmail(email: string | null, password: string): Promise<ModAccount | null> {
+  const normalizedEmail = email ? normalizeEmail(email) : null;
+  const db = getDb();
+  if (db) {
+    let account: DbAccountRecord | null = null;
+    try {
+      account = await db.account.findFirst({
+        where: {
+          bindEmail: { equals: normalizedEmail ?? 'invalid-email@invalid.local', mode: 'insensitive' },
+          status: 'ACTIVE',
+          identities: { some: { provider: { in: ['COMMUNITY', 'OFFICIAL'] } } }
+        },
+        include: {
+          identities: true,
+          siteRoles: true,
+          organizationMemberships: { include: { organization: true } },
+          ownedOrganizations: true
+        }
+      });
+    } catch {
+      account = null;
+    }
+    if (!await verifyPassword(password, account?.passwordHash)) return null;
+    return account ? dbAccountToModAccount(account) : null;
+  }
+  const accounts = await readAccounts();
+  const account = normalizedEmail
+    ? accounts.find((item) => item.status === 'ACTIVE' && accountEmailMatches(item, normalizedEmail) && accountIdentities(item).some((identity) => identity.provider === 'community' || identity.provider === 'official'))
+    : undefined;
+  if (!await verifyPassword(password, account?.passwordHash)) return null;
+  return account ?? null;
 }

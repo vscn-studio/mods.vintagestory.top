@@ -29,6 +29,7 @@ type PreviewLocalizedValue = {
 
 type PreviewContent = {
   name: { zh: string; en: string };
+  summary: { zh: string; en: string };
   iconUrl?: string | null;
   author?: string;
   authorType: 'user' | 'organization';
@@ -198,6 +199,7 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
           authorType: owner?.type ?? 'user',
           authorId: owner?.type === 'organization' ? owner.slug ?? owner.id : owner?.username ?? owner?.id ?? '',
           author: owner?.name ?? '',
+          summary: raw.summary ?? { zh: '', en: '' },
           description: raw.description ?? { zh: '', en: '' },
           tags: (raw.tags ?? []).map((tag: { name: string; nameEn?: string }) => ({ zh: tag.name, en: tag.nameEn ?? tag.name })),
           environments: (raw.environments ?? []).map((environment: { name: string; nameEn?: string }) => ({ zh: environment.name, en: environment.nameEn ?? environment.name })),
@@ -269,6 +271,7 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
 
   const current = content ?? {
     name: { zh: titleFromId(id), en: titleFromId(id) },
+    summary: { zh: '', en: '' },
     author: language === 'en' ? 'Unknown creator' : '未知作者',
     authorType: 'user' as const,
     authorId: '',
@@ -277,6 +280,7 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
     releases: []
   };
   const name = language === 'en' ? current.name.en : current.name.zh;
+  const summary = language === 'en' ? current.summary.en : current.summary.zh;
   const description = current.description.zh;
   const author = current.author ?? (current.authorType === 'organization' ? current.owner?.name : undefined) ?? '';
   const authorPath = current.authorType === 'user' ? `/user/${encodeURIComponent(current.authorId)}` : `/organization/${encodeURIComponent(current.authorId)}`;
@@ -497,7 +501,7 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
           </div>
           <div className="preview-hero__copy">
             <h1 id="preview-title">{name}</h1>
-            <div className="preview-description preview-rich-content" dangerouslySetInnerHTML={{ __html: description }} />
+            <div className="preview-description preview-rich-content">{summary ? <p>{summary}</p> : null}</div>
             <div className="preview-hero__meta-row">
               <dl className="preview-hero__stats">
                 <div>

@@ -844,7 +844,7 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
           {canCreateRelease ? <form className="management-form management-release-create-form" onSubmit={createRelease}>
             <label className="management-field"><span>{text.version}</span><input value={version} onChange={(event) => setVersion(event.target.value)} placeholder="1.0.0" maxLength={80} required /></label>
             <div className="management-field"><span>{text.changelog}</span><RichTextEditor value={changelog} onChange={setChangelog} ariaLabel={text.changelog} /></div>
-            <div className="management-field">
+            <div className="management-field management-release-compatible-field">
               <span>{text.compatibleVersions}</span>
               <GameVersionPicker value={releaseCompatibleVersions} onChange={setReleaseCompatibleVersions} ariaLabel={text.compatibleVersions} />
             </div>

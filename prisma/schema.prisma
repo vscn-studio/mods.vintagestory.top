@@ -108,6 +108,8 @@ model Account {
   displayName             String                   @db.VarChar(120)
   bio                     String?                  @db.VarChar(2000)
   bindEmail               String                   @db.VarChar(320)
+  passwordHash            String?                  @db.VarChar(255)
+  passwordSetAt           DateTime?
   avatarUrl               String?                  @db.VarChar(2048)
   status                  AccountStatus            @default(ACTIVE)
   createdAt               DateTime                 @default(now())

@@ -2,20 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   AccountBindingConflictError,
   clearPendingIdentity,
+  clearVerifiedBinding,
   consumeActivationChallenge,
   findBindingConflict,
   getPendingIdentity,
+  getVerifiedBinding,
   normalizeEmail,
   createAccountSession,
+  setVerifiedBinding,
   upsertModAccount
 } from '@/lib/auth-server';
+import { hashPassword, validatePassword } from '@/lib/password';
 import { checkCsrf, rateLimit } from '@/lib/request-security';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
-  if (!checkCsrf(request)) return NextResponse.json({ ok: false, message: '请求来源校验失败。' }, { status: 403 });
-  if (!rateLimit(request, 20)) return NextResponse.json({ ok: false, message: '请求过于频繁，请稍后重试。' }, { status: 429 });
+  if (!checkCsrf(request)) return NextResponse.json({ ok: false, message: '请求来源校验失败。' }, { status: 403, headers: { 'Cache-Control': 'no-store' } });
+  if (!rateLimit(request, 20)) return NextResponse.json({ ok: false, message: '请求过于频繁，请稍后重试。' }, { status: 429, headers: { 'Cache-Control': 'no-store' } });
   const identity = getPendingIdentity(request);
   if (!identity) {
     return NextResponse.json(
@@ -35,6 +39,7 @@ export async function POST(request: NextRequest) {
   }
 
   const bindEmail = normalizeEmail(body.bindEmail);
+  const step = body.step === 'set-password' ? 'set-password' : 'verify-code';
   const activationCode = typeof body.activationCode === 'string' ? body.activationCode.trim() : '';
   if (!bindEmail) {
     return NextResponse.json(
@@ -49,7 +54,7 @@ export async function POST(request: NextRequest) {
         {
           ok: false,
           code: 'EMAIL_PROVIDER_CONFLICT',
-          message: identity.provider === 'community' ? '该邮箱已绑定另外一个社区账号。' : '该邮箱已绑定另外一个游戏账号。'
+          message: '该邮箱已绑定其他 Mod 站账号，不能用于当前绑定。'
         },
         { status: 409, headers: { 'Cache-Control': 'no-store' } }
       );
@@ -61,45 +66,69 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!/^\d{6}$/.test(activationCode)) {
+  if (step === 'verify-code' && !/^\d{6}$/.test(activationCode)) {
     return NextResponse.json(
       { ok: false, message: '请输入邮箱收到的 6 位验证码。' },
       { status: 400, headers: { 'Cache-Control': 'no-store' } }
     );
   }
 
-  let verification: Awaited<ReturnType<typeof consumeActivationChallenge>>;
-  try {
-    verification = await consumeActivationChallenge(identity, bindEmail, activationCode);
-  } catch {
-    return NextResponse.json(
-      { ok: false, message: '验证码服务暂时不可用，请稍后重试。' },
-      { status: 503, headers: { 'Cache-Control': 'no-store' } }
-    );
+  if (step === 'verify-code') {
+    let verification: Awaited<ReturnType<typeof consumeActivationChallenge>>;
+    try {
+      verification = await consumeActivationChallenge(identity, bindEmail, activationCode);
+    } catch {
+      return NextResponse.json(
+        { ok: false, message: '验证码服务暂时不可用，请稍后重试。' },
+        { status: 503, headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
+    if (verification !== 'ok') {
+      return NextResponse.json(
+        {
+          ok: false,
+          message:
+            verification === 'locked'
+              ? '验证码尝试次数过多，请重新发送验证码。'
+              : '验证码无效或已过期，请重新获取。'
+        },
+        { status: 400, headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
+    const response = NextResponse.json({ ok: true, verified: true }, { headers: { 'Cache-Control': 'no-store' } });
+    setVerifiedBinding(response, identity, bindEmail);
+    return response;
   }
-  if (verification !== 'ok') {
-    return NextResponse.json(
-      {
-        ok: false,
-        message:
-          verification === 'locked'
-            ? '验证码尝试次数过多，请重新发送验证码。'
-            : '验证码无效或已过期，请重新获取。'
-      },
-      { status: 400, headers: { 'Cache-Control': 'no-store' } }
-    );
+
+  const verified = getVerifiedBinding(request);
+  if (!verified || verified.provider !== identity.provider || verified.subject !== identity.subject || verified.bindEmail !== bindEmail) {
+    return NextResponse.json({ ok: false, message: '请先验证绑定邮箱。' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
+  }
+  const password = typeof body.password === 'string' ? body.password : '';
+  const confirmPassword = typeof body.confirmPassword === 'string' ? body.confirmPassword : '';
+  if (!validatePassword(password)) {
+    return NextResponse.json({ ok: false, message: '密码长度需为 8 至 128 个字符。' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
+  }
+  if (password !== confirmPassword) {
+    return NextResponse.json({ ok: false, message: '两次输入的密码不一致。' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
+  }
+  let passwordHash: string;
+  try {
+    passwordHash = await hashPassword(password);
+  } catch {
+    return NextResponse.json({ ok: false, message: '密码服务暂时不可用，请稍后重试。' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
   }
 
   let account: Awaited<ReturnType<typeof upsertModAccount>>;
   try {
-    account = await upsertModAccount(identity, bindEmail);
+    account = await upsertModAccount(identity, bindEmail, passwordHash);
   } catch (error) {
     if (error instanceof AccountBindingConflictError) {
       return NextResponse.json(
         {
           ok: false,
           code: 'EMAIL_PROVIDER_CONFLICT',
-          message: error.provider === 'community' ? '该邮箱已绑定另外一个社区账号。' : '该邮箱已绑定另外一个游戏账号。'
+          message: '该邮箱已绑定其他 Mod 站账号，不能用于当前绑定。'
         },
         { status: 409, headers: { 'Cache-Control': 'no-store' } }
       );
@@ -127,5 +156,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, message: '会话服务暂时不可用，请稍后重试。' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
   }
   clearPendingIdentity(response);
+  clearVerifiedBinding(response);
   return response;
 }

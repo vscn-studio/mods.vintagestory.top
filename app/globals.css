@@ -656,7 +656,8 @@ a:focus-visible {
 }
 
 .auth-button--community,
-.auth-button--official {
+.auth-button--official,
+.auth-button--email {
   background: #eeeeee;
   color: var(--ink);
 }
@@ -664,13 +665,16 @@ a:focus-visible {
 .auth-button--community:hover,
 .auth-button--community:focus-visible,
 .auth-button--official:hover,
-.auth-button--official:focus-visible {
+.auth-button--official:focus-visible,
+.auth-button--email:hover,
+.auth-button--email:focus-visible {
   background: #e2e2e2;
   outline: none;
 }
 
 .site-shell--night .auth-button--community,
-.site-shell--night .auth-button--official {
+.site-shell--night .auth-button--official,
+.site-shell--night .auth-button--email {
   background: #202020;
   color: var(--ink);
 }
@@ -678,7 +682,9 @@ a:focus-visible {
 .site-shell--night .auth-button--community:hover,
 .site-shell--night .auth-button--community:focus-visible,
 .site-shell--night .auth-button--official:hover,
-.site-shell--night .auth-button--official:focus-visible {
+.site-shell--night .auth-button--official:focus-visible,
+.site-shell--night .auth-button--email:hover,
+.site-shell--night .auth-button--email:focus-visible {
   background: #2f2f2f;
 }
 
@@ -6520,6 +6526,16 @@ summary:active {
   margin-bottom: 26px;
 }
 
+.management-release-compatible-field {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+  align-items: start;
+  column-gap: 18px;
+}
+
+.management-release-compatible-field > .game-version-picker {
+  width: 100%;
+}
+
 .management-rich-editor__loading {
   display: flex;
   min-height: 300px;
@@ -6953,5 +6969,6 @@ summary:active {
   .management-release { grid-template-columns: 1fr; }
   .management-release > div { grid-column: auto; }
   .management-release .auth-code-button { width: 100%; }
+  .management-release-compatible-field { grid-template-columns: 1fr; }
   .management-stat-grid { grid-template-columns: 1fr 1fr; }
 }

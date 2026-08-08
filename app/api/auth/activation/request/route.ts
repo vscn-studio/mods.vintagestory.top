@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
   try {
     if (await findBindingConflict(identity, bindEmail)) {
       return errorResponse(
-        identity.provider === 'community' ? '该邮箱已绑定另外一个社区账号。' : '该邮箱已绑定另外一个游戏账号。',
+        '该邮箱已绑定其他 Mod 站账号，不能用于当前绑定。',
         409,
         { code: 'EMAIL_PROVIDER_CONFLICT' }
       );
