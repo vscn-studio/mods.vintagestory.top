@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   AccountBindingConflictError,
+  bindingNeedsPassword,
   clearPendingIdentity,
   clearVerifiedBinding,
   consumeActivationChallenge,
@@ -95,7 +96,36 @@ export async function POST(request: NextRequest) {
         { status: 400, headers: { 'Cache-Control': 'no-store' } }
       );
     }
-    const response = NextResponse.json({ ok: true, verified: true }, { headers: { 'Cache-Control': 'no-store' } });
+    let requiresPassword: boolean;
+    try {
+      requiresPassword = await bindingNeedsPassword(bindEmail);
+    } catch {
+      return NextResponse.json({ ok: false, message: '账号服务暂时不可用，请稍后重试。' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+    }
+    if (!requiresPassword) {
+      let account: Awaited<ReturnType<typeof upsertModAccount>>;
+      try {
+        account = await upsertModAccount(identity, bindEmail);
+      } catch (error) {
+        if (error instanceof AccountBindingConflictError) {
+          return NextResponse.json({ ok: false, code: 'EMAIL_PROVIDER_CONFLICT', message: '该认证身份或邮箱已绑定其他 Mod 站账号。' }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
+        }
+        return NextResponse.json({ ok: false, message: '账号保存失败，请稍后重试。' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+      }
+      if (account.status !== 'ACTIVE') {
+        return NextResponse.json({ ok: false, code: 'ACCOUNT_DISABLED', message: '该账号已被停用，无法登录。' }, { status: 403, headers: { 'Cache-Control': 'no-store' } });
+      }
+      const response = NextResponse.json({ ok: true, authenticated: true }, { headers: { 'Cache-Control': 'no-store' } });
+      try {
+        await createAccountSession(response, account.id, request);
+      } catch {
+        return NextResponse.json({ ok: false, message: '会话服务暂时不可用，请稍后重试。' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+      }
+      clearPendingIdentity(response);
+      clearVerifiedBinding(response);
+      return response;
+    }
+    const response = NextResponse.json({ ok: true, verified: true, requiresPassword: true }, { headers: { 'Cache-Control': 'no-store' } });
     setVerifiedBinding(response, identity, bindEmail);
     return response;
   }

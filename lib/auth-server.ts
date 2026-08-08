@@ -1109,3 +1109,18 @@ export async function authenticateEmail(email: string | null, password: string):
   if (!await verifyPassword(password, account?.passwordHash)) return null;
   return account ?? null;
 }
+
+export async function bindingNeedsPassword(bindEmail: string): Promise<boolean> {
+  const normalizedEmail = normalizeEmail(bindEmail);
+  if (!normalizedEmail) return true;
+  const db = getDb();
+  if (db) {
+    const accounts = await db.account.findMany({
+      where: { bindEmail: { equals: normalizedEmail, mode: 'insensitive' } },
+      select: { passwordHash: true }
+    });
+    return accounts.length !== 1 || !accounts[0].passwordHash;
+  }
+  const accounts = (await readAccounts()).filter((account) => accountEmailMatches(account, normalizedEmail));
+  return accounts.length !== 1 || !accounts[0].passwordHash;
+}

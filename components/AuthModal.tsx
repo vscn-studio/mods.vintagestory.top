@@ -277,8 +277,17 @@ export function AuthModal({
         throw new Error(payload.message ?? text.bindingFailed);
       }
       if (!activationVerified) {
-        setActivationVerified(true);
-        setError('');
+        const payload = (await response.json()) as { authenticated?: boolean; requiresPassword?: boolean };
+        if (payload.authenticated) {
+          setOfficialStage('success');
+          setBindComplete(true);
+          onAuthenticated();
+        } else if (payload.requiresPassword) {
+          setActivationVerified(true);
+          setError('');
+        } else {
+          throw new Error(text.bindingFailed);
+        }
       } else {
         setOfficialStage('success');
         setBindComplete(true);
