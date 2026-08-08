@@ -637,7 +637,6 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
   const hasDescription = Boolean(project.description.zh.trim());
   const hasLicense = Boolean(project.license?.trim());
   const hasLinks = Object.values(project.links ?? {}).some(Boolean);
-  const releaseGameVersions = [...new Set(project.releases.flatMap((release) => release.compatibleVersions ?? []).filter((value): value is string => typeof value === 'string' && Boolean(value.trim())))];
   const visibilityOptions: ContentSelectOption[] = [
     { value: 'public', label: text.public },
     { value: 'private', label: text.private }
@@ -656,7 +655,6 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
     { value: 'client', label: language === 'en' ? 'Client' : '客户端', icon: Monitor },
     { value: 'server', label: language === 'en' ? 'Server' : '服务端', icon: HardDrive }
   ];
-  const environmentLabel = (value: string) => environmentOptions.find((option) => option.value === value)?.label ?? value;
   const toggleTaxonomyEnvironment = (value: string) => {
     setTaxonomyEnvironments((current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
   };
@@ -782,13 +780,6 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
               <p className="management-form__hint">{language === 'en' ? 'Separate tags and categories with commas.' : '标签和分类可使用逗号分隔。'}</p>
               <div className="management-form__actions"><button className="management-button management-button--primary" type="submit"><Save size={16} />{saved ? text.saved : text.saveChanges}</button></div>
             </form>
-            <aside className="preview-sidebar__section preview-compatibility-section management-compatibility-preview">
-              <div className="preview-section__heading"><h2>{language === 'en' ? 'Compatibility' : '兼容性'}</h2></div>
-              <dl className="preview-detail-list">
-                <div><dt>{text.gameVersions}</dt><dd><ul className="preview-sidebar-tags preview-sidebar-tags--compact" aria-label={text.gameVersions}>{releaseGameVersions.length ? releaseGameVersions.map((gameVersion) => <li key={gameVersion}>{gameVersion}</li>) : <li>{text.noData}</li>}</ul></dd></div>
-                <div><dt>{text.environments}</dt><dd><ul className="preview-sidebar-tags preview-sidebar-tags--compact" aria-label={text.environments}>{taxonomyEnvironments.length ? taxonomyEnvironments.map((environment) => <li key={environment}>{environmentLabel(environment)}</li>) : <li>{text.noData}</li>}</ul></dd></div>
-              </dl>
-            </aside>
           </div>
         </section> : null}
 

@@ -6510,7 +6510,8 @@ summary:active {
 }
 
 .management-form--panel {
-  max-width: 680px;
+  width: 100%;
+  max-width: none;
   gap: 18px;
 }
 
@@ -6604,19 +6605,11 @@ summary:active {
 }
 
 .management-taxonomy-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 680px) minmax(220px, 280px);
-  align-items: start;
-  gap: 28px;
+  display: block;
 }
 
 .management-taxonomy-layout .management-form--panel {
   max-width: none;
-}
-
-.management-compatibility-preview {
-  min-width: 0;
-  margin: 0;
 }
 
 .management-field {
@@ -6929,7 +6922,6 @@ summary:active {
   .management-sidebar { position: static; margin-bottom: 18px; }
   .management-nav { display: flex; overflow-x: auto; padding: 6px; }
   .management-nav__item { width: auto; flex: 0 0 auto; white-space: nowrap; }
-  .management-taxonomy-layout { grid-template-columns: minmax(0, 1fr); }
   .management-checklist__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .management-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
