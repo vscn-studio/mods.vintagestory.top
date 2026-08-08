@@ -841,12 +841,11 @@ export function ProjectManagementPage({ id }: ProjectManagementProps) {
         {canManageReleases && currentSection === 'versions' ? <section className="management-panel">
           <div className="management-panel__heading"><div><h2>{text.releases}</h2><p>{language === 'en' ? 'Create releases, upload files, and submit them for review.' : '创建版本、上传文件并提交审核。'}</p></div></div>
           {canCreateRelease ? <form className="management-form management-release-create-form" onSubmit={createRelease}>
-            <label className="management-field"><span>{text.version}</span><input value={version} onChange={(event) => setVersion(event.target.value)} placeholder="1.0.0" maxLength={80} required /></label>
-            <div className="management-field"><span>{text.changelog}</span><RichTextEditor value={changelog} onChange={setChangelog} ariaLabel={text.changelog} /></div>
-            <div className="management-field management-release-compatible-field">
-              <span>{text.compatibleVersions}</span>
+            <div className="management-release-compatible-picker">
               <GameVersionPicker value={releaseCompatibleVersions} onChange={setReleaseCompatibleVersions} ariaLabel={text.compatibleVersions} collapsible />
             </div>
+            <label className="management-field"><span>{text.version}</span><input value={version} onChange={(event) => setVersion(event.target.value)} placeholder="1.0.0" maxLength={80} required /></label>
+            <div className="management-field"><span>{text.changelog}</span><RichTextEditor value={changelog} onChange={setChangelog} ariaLabel={text.changelog} /></div>
             {canManageFiles ? <div className="management-field"><span>{text.upload}</span><label className="management-release-file"><FileUp size={17} aria-hidden="true" /><span>{releaseFile?.name ?? text.upload}</span><input type="file" onChange={(event) => setReleaseFile(event.target.files?.[0] ?? null)} required /></label></div> : null}
             <div className="management-form__actions"><button className="management-button management-button--primary" type="submit"><Send size={16} />{text.createRelease}</button></div>
           </form> : null}

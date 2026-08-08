@@ -6649,14 +6649,9 @@ summary:active {
   margin-bottom: 26px;
 }
 
-.management-release-compatible-field {
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
-  align-items: start;
-  column-gap: 18px;
-}
-
-.management-release-compatible-field > .game-version-picker {
-  width: 100%;
+.management-release-compatible-picker {
+  width: min(360px, 100%);
+  justify-self: start;
 }
 
 .management-rich-editor__loading {
@@ -7100,6 +7095,5 @@ summary:active {
   .management-release { grid-template-columns: 1fr; }
   .management-release > div { grid-column: auto; }
   .management-release .auth-code-button { width: 100%; }
-  .management-release-compatible-field { grid-template-columns: 1fr; }
   .management-stat-grid { grid-template-columns: 1fr 1fr; }
 }
