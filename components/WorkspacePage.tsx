@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, Check, FolderKanban, Heart, LoaderCircle, LogOut, Monitor, Save, Settings, UsersRound, X } from 'lucide-react';
+import { Bell, Building2, Check, Copy, FolderKanban, Heart, LayoutDashboard, LoaderCircle, LogOut, Monitor, Plus, Save, Settings, UsersRound, X } from 'lucide-react';
 import Link from 'next/link';
 import { type FormEvent, useEffect, useState } from 'react';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
@@ -16,6 +16,8 @@ type Project = {
   type: string;
   name: { zh: string; en: string };
   summary: { zh: string; en: string };
+  iconUrl?: string | null;
+  status?: string;
   stats?: { downloads: number; followers: number };
   updatedAt: string;
   viewer?: Viewer;
@@ -37,14 +39,14 @@ const copy = {
     settings: '账户设置', notifications: '消息提醒', favorites: '我的收藏', follows: '我的关注', projects: '我的项目', organizations: '组织管理',
     save: '保存', saved: '已保存', noData: '暂无数据。', loading: '正在加载…', error: '加载失败。', retry: '重试',
     displayName: '显示名称', bio: '个人介绍', markAll: '全部标为已读', markRead: '标为已读', unread: '未读', invitations: '组织邀请',
-    invitedBy: '邀请人', accept: '接受', decline: '拒绝', members: '成员', projectCount: '项目', open: '打开', manage: '管理', signIn: '请先登录。',
+    invitedBy: '邀请人', accept: '接受', decline: '拒绝', members: '成员', projectCount: '项目', open: '打开', manage: '管理', signIn: '请先登录。', dashboard: '仪表盘', overview: '概述', creator: '创作者', projectList: '项目', createProject: '创建项目', projectName: '名称', projectId: 'ID', projectType: '类型', projectStatus: '状态', mod: '模组', modpack: '整合包', draft: '草案', pendingReview: '审核中', published: '已发布', archived: '已归档', unknownStatus: '未知',
     sessions: '登录会话', currentSession: '当前会话', revoke: '撤销', revokeAll: '退出所有会话', revokeAllConfirm: '这会使当前设备也退出登录。是否继续？', revokeConfirm: '确定撤销这个登录会话吗？', sessionCreated: '登录于', sessionLastSeen: '最近活动', sessionError: '会话操作失败。', notificationFallback: '新的站内通知', followHint: '关注的项目会在有新版本或动态时出现在通知中。'
   },
   en: {
     settings: 'Account settings', notifications: 'Notifications', favorites: 'Favorites', follows: 'Following', projects: 'My projects', organizations: 'Organizations',
     save: 'Save', saved: 'Saved', noData: 'No data yet.', loading: 'Loading…', error: 'Unable to load data.', retry: 'Retry',
     displayName: 'Display name', bio: 'Bio', markAll: 'Mark all as read', markRead: 'Mark read', unread: 'Unread', invitations: 'Organization invitations',
-    invitedBy: 'Invited by', accept: 'Accept', decline: 'Decline', members: 'members', projectCount: 'projects', open: 'Open', manage: 'Manage', signIn: 'Sign in first.',
+    invitedBy: 'Invited by', accept: 'Accept', decline: 'Decline', members: 'members', projectCount: 'projects', open: 'Open', manage: 'Manage', signIn: 'Sign in first.', dashboard: 'Dashboard', overview: 'Overview', creator: 'Creator', projectList: 'Projects', createProject: 'Create project', projectName: 'Name', projectId: 'ID', projectType: 'Type', projectStatus: 'Status', mod: 'Mod', modpack: 'Modpack', draft: 'Draft', pendingReview: 'In review', published: 'Published', archived: 'Archived', unknownStatus: 'Unknown',
     sessions: 'Signed-in sessions', currentSession: 'Current session', revoke: 'Revoke', revokeAll: 'Sign out everywhere', revokeAllConfirm: 'This also signs out this device. Continue?', revokeConfirm: 'Revoke this signed-in session?', sessionCreated: 'Signed in', sessionLastSeen: 'Last active', sessionError: 'Unable to update sessions.', notificationFallback: 'New site notification', followHint: 'Projects you follow can send release and activity notifications here.'
   }
 } as const;
@@ -70,6 +72,18 @@ function dateTime(value: string): string {
   try { return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)); } catch { return value; }
 }
 
+function projectStatusLabel(status: string | undefined, text: (typeof copy)[keyof typeof copy]): string {
+  switch (status?.toLowerCase()) {
+    case 'draft': return text.draft;
+    case 'pending_review':
+    case 'pending-review':
+    case 'review': return text.pendingReview;
+    case 'published': return text.published;
+    case 'archived': return text.archived;
+    default: return text.unknownStatus;
+  }
+}
+
 export function WorkspacePage({ kind, sessionAccount = null }: Props) {
   const language = useSiteLanguage();
   const text = copy[language];
@@ -84,6 +98,7 @@ export function WorkspacePage({ kind, sessionAccount = null }: Props) {
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
   const [busyId, setBusyId] = useState('');
+  const [copiedProjectId, setCopiedProjectId] = useState('');
   const [refresh, setRefresh] = useState(0);
   const title = text[kind];
 
@@ -190,6 +205,16 @@ export function WorkspacePage({ kind, sessionAccount = null }: Props) {
     else setSessions((items) => items.filter((session) => session.id !== sessionId));
   }
 
+  async function copyProjectId(id: string) {
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopiedProjectId(id);
+      window.setTimeout(() => setCopiedProjectId((current) => current === id ? '' : current), 1600);
+    } catch {
+      setError(text.error);
+    }
+  }
+
   if (!sessionAccount) return <section className="workspace-page"><div className="workspace-page__inner"><h1>{title}</h1><p>{text.signIn}</p></div></section>;
 
   const body = loading ? (
@@ -213,9 +238,41 @@ export function WorkspacePage({ kind, sessionAccount = null }: Props) {
     </section>
   ) : kind === 'organizations' ? (
     <section className="workspace-grid">{organizations.length ? organizations.map((organization) => <article className="workspace-card workspace-card--panel" key={organization.id}><Link className="workspace-card__title" href={`/organization/${encodeURIComponent(organization.slug)}`}>{organization.name}</Link><span>{organization.members?.length ?? 0} {text.members} · {organization.projects?.length ?? 0} {text.projectCount}</span><div className="workspace-card__actions"><Link href={`/organization/${encodeURIComponent(organization.slug)}`}>{text.open}</Link>{canManageOrganization(organization) ? <Link href={`/organization/${encodeURIComponent(organization.slug)}/manage`}>{text.manage}</Link> : null}</div></article>) : <p className="workspace-page__state">{text.noData}</p>}</section>
+  ) : kind === 'projects' ? (
+    <section className="workspace-projects-panel" aria-labelledby="workspace-projects-title">
+      <div className="workspace-projects-panel__heading">
+        <h2 id="workspace-projects-title">{text.projectList}</h2>
+        <Link className="workspace-projects-panel__create" href="/submit"><Plus size={17} aria-hidden="true" />{text.createProject}</Link>
+      </div>
+      <div className="workspace-projects-table-wrap">
+        <table className="workspace-projects-table">
+          <thead>
+            <tr><th>{text.projectName}</th><th>{text.projectId}</th><th>{text.projectType}</th><th>{text.projectStatus}</th><th><span className="sr-only">{text.manage}</span></th></tr>
+          </thead>
+          <tbody>
+            {projects.length ? projects.map((project) => {
+              const projectName = language === 'en' ? project.name.en : project.name.zh;
+              const projectType = project.type === 'modpack' ? text.modpack : text.mod;
+              const status = projectStatusLabel(project.status, text);
+              return <tr key={project.id}>
+                <td><Link className="workspace-projects-table__name" href={projectHref(project)}><span className="workspace-projects-table__icon" aria-hidden="true"><img src={project.iconUrl || '/brand/logo-icon-rounded.svg'} alt="" /></span><span>{projectName}</span></Link></td>
+                <td><button className="workspace-projects-table__id" type="button" title={copiedProjectId === project.id ? text.saved : project.id} onClick={() => void copyProjectId(project.id)}><span>{project.id}</span><Copy size={14} aria-hidden="true" /></button></td>
+                <td>{projectType}</td>
+                <td><span className={`workspace-project-status workspace-project-status--${project.status?.toLowerCase() ?? 'unknown'}`}>{status}</span></td>
+                <td>{canManageProject(project) ? <Link className="workspace-projects-table__manage" href={`/projects/${encodeURIComponent(project.slug)}/manage`}>{text.manage}</Link> : <Link className="workspace-projects-table__manage" href={projectHref(project)}>{text.open}</Link>}</td>
+              </tr>;
+            }) : <tr><td className="workspace-projects-table__empty" colSpan={5}>{text.noData}</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </section>
   ) : (
     <section className="workspace-grid">{projects.length ? projects.map((project) => <article className="workspace-card workspace-card--panel" key={project.id}><Link className="workspace-card__title" href={projectHref(project)}>{language === 'en' ? project.name.en : project.name.zh}</Link><span>{language === 'en' ? project.summary.en : project.summary.zh}</span><small>{project.stats?.downloads?.toLocaleString() ?? 0} downloads</small><div className="workspace-card__actions"><Link href={projectHref(project)}>{text.open}</Link>{canManageProject(project) ? <Link href={`/projects/${encodeURIComponent(project.slug)}/manage`}>{text.manage}</Link> : null}</div></article>) : <p className="workspace-page__state">{kind === 'follows' ? text.followHint : text.noData}</p>}</section>
   );
 
-  return <section className="workspace-page" aria-labelledby="workspace-title"><div className="workspace-page__inner"><header className="workspace-page__header"><span className="workspace-page__icon" aria-hidden="true">{kind === 'settings' ? <Settings size={22} /> : kind === 'notifications' ? <Bell size={22} /> : kind === 'favorites' || kind === 'follows' ? <Heart size={22} /> : kind === 'projects' ? <FolderKanban size={22} /> : <UsersRound size={22} />}</span><h1 id="workspace-title">{title}</h1></header>{body}</div></section>;
+  if (kind === 'projects') {
+    return <section className="workspace-page workspace-page--dashboard" aria-labelledby="workspace-projects-title"><div className="workspace-page__inner workspace-dashboard"><aside className="workspace-dashboard__sidebar"><nav className="workspace-dashboard__nav" aria-label={text.dashboard}><span className="workspace-dashboard__label">{text.dashboard}</span><Link href={`/user/${encodeURIComponent(sessionAccount.username)}`}><LayoutDashboard size={18} aria-hidden="true" />{text.overview}</Link><Link href="/notifications"><Bell size={18} aria-hidden="true" />{text.notifications}</Link><Link href="/favorites"><Heart size={18} aria-hidden="true" />{text.favorites}</Link><span className="workspace-dashboard__label">{text.creator}</span><Link className="workspace-dashboard__nav-item--active" href="/projects" aria-current="page"><FolderKanban size={18} aria-hidden="true" />{text.projectList}</Link><Link href="/organizations"><Building2 size={18} aria-hidden="true" />{text.organizations}</Link></nav></aside><div className="workspace-dashboard__content">{body}</div></div></section>;
+  }
+
+  return <section className="workspace-page" aria-labelledby="workspace-title"><div className="workspace-page__inner"><header className="workspace-page__header"><span className="workspace-page__icon" aria-hidden="true">{kind === 'settings' ? <Settings size={22} /> : kind === 'notifications' ? <Bell size={22} /> : kind === 'favorites' || kind === 'follows' ? <Heart size={22} /> : <UsersRound size={22} />}</span><h1 id="workspace-title">{title}</h1></header>{body}</div></section>;
 }

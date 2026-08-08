@@ -292,6 +292,15 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
   const compatibleVersions = [...new Set(releases.flatMap((release) => Array.isArray(release.compatibleVersions) ? release.compatibleVersions.filter((value): value is string => typeof value === 'string' && Boolean(value.trim())) : []))];
   const runtimeEnvironments = current.environments ?? [];
   const sidebarTags = current.tags ?? [];
+  const localizedSidebarTags = sidebarTags
+    .map((tag) => language === 'en' ? tag.en : tag.zh)
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+  const previewTagItems = [
+    ...localizedSidebarTags,
+    ...(compatibleVersions.length > 0 ? [compatibleVersions.slice(0, 3).join(' · ')] : []),
+    kind === 'modpack' ? 'Modpack' : 'Mod'
+  ];
   const license = typeof current.license === 'string' ? current.license : '';
   const licenseOption = getLicenseOption(license);
   const published = current.published ?? { zh: '', en: '' };
@@ -517,11 +526,11 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
                   <dd>{(current.stats?.followers ?? 0).toLocaleString()}</dd>
                 </div>
               </dl>
-              <ul className="preview-tags" aria-label={text.tags}>
-                <li>{sidebarTags[0] ? (language === 'en' ? sidebarTags[0].en : sidebarTags[0].zh) : text.noData}</li>
-                <li>{compatibleVersions.length ? compatibleVersions.slice(0, 3).join(' · ') : text.noData}</li>
-                <li>{kind === 'modpack' ? 'Modpack' : 'Mod'}</li>
-              </ul>
+              {previewTagItems.length > 0 ? (
+                <ul className="preview-tags" aria-label={text.tags}>
+                  {previewTagItems.map((tag) => <li key={tag}>{tag}</li>)}
+                </ul>
+              ) : null}
             </div>
           </div>
           <div className="preview-hero__actions">
@@ -803,15 +812,16 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
               </nav>
             </section>
 
-            <section className="preview-sidebar__section">
-              <div className="preview-section__heading">
-                <h2>{text.tags}</h2>
-              </div>
-              <ul className="preview-sidebar-tags" aria-label={text.tags}>
-                {sidebarTags.length > 0 ? sidebarTags.map((tag) => <li key={language === 'en' ? tag.en : tag.zh}>{language === 'en' ? tag.en : tag.zh}</li>) : <li>{text.noData}</li>}
-                {compatibleVersions.length > 0 ? <li>{compatibleVersions.join(' · ')}</li> : null}
-              </ul>
-            </section>
+            {localizedSidebarTags.length > 0 ? (
+              <section className="preview-sidebar__section">
+                <div className="preview-section__heading">
+                  <h2>{text.tags}</h2>
+                </div>
+                <ul className="preview-sidebar-tags" aria-label={text.tags}>
+                  {localizedSidebarTags.map((tag) => <li key={tag}>{tag}</li>)}
+                </ul>
+              </section>
+            ) : null}
 
             <section className="preview-sidebar__section">
               <div className="preview-section__heading">
