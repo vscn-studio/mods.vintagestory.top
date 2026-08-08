@@ -1736,6 +1736,11 @@ a:focus-visible {
   min-width: 0;
 }
 
+.preview-sidebar {
+  align-self: start;
+  align-content: start;
+}
+
 .preview-content-column {
   display: grid;
   align-self: start;

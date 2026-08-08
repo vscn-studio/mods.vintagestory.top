@@ -81,6 +81,9 @@ export async function POST(request: NextRequest) {
         }
       );
     }
+    if (reason === 'invalidemailorpassword') {
+      return errorResponse('VintageStory 账号或密码错误，请检查后重试。', 401);
+    }
     return errorResponse(`VintageStory 登录失败${loginData.reason ? `：${loginData.reason}` : ''}`, 401);
   }
 
