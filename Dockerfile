@@ -1,16 +1,25 @@
+# syntax=docker/dockerfile:1.7
+
 FROM node:22-alpine AS dependencies
 
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 
-FROM node:22-alpine AS builder
+FROM dependencies AS prisma
+
+COPY prisma ./prisma
+RUN npx prisma generate
+
+FROM prisma AS builder
 
 WORKDIR /app
-COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
-RUN npx prisma generate
-RUN npm run build
+RUN --mount=type=cache,target=/app/.next/cache npm run build
+
+FROM dependencies AS migrator
+
+COPY prisma ./prisma
 
 FROM node:22-alpine AS runner
 

@@ -79,7 +79,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: builder
+      target: migrator
     container_name: vscn_mod_db_migrate
     environment:
       # Keep the migration container on the Compose service name by default.
