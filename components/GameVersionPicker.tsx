@@ -3,7 +3,7 @@
 import { Check, ListFilter, LoaderCircle, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSiteLanguage } from '@/components/SiteLanguageContext';
-import type { GameVersionOption } from '@/lib/game-versions';
+import { isSupportedGameVersion, MAX_RELEASE_COMPATIBLE_VERSIONS, type GameVersionOption } from '@/lib/game-versions';
 
 type Props = {
   value: string[];
@@ -50,6 +50,7 @@ const copy = {
     latest: '最新',
     saved: '已存版本',
     maximum: '最多选择 32 个游戏版本',
+    releaseMaximum: `最多选择 ${MAX_RELEASE_COMPATIBLE_VERSIONS} 个游戏版本`,
     searchPlaceholder: '筛选版本号',
     noMatches: '没有匹配的游戏版本',
     allVersions: '列出所有版本',
@@ -60,7 +61,8 @@ const copy = {
     minor: '次',
     patch: '补丁',
     prerelease: '预发布',
-    release: '正式版'
+    release: '正式版',
+    selectedCount: (count: number) => `已选择 ${count} 个版本`
   },
   en: {
     loading: 'Loading game versions…',
@@ -71,6 +73,7 @@ const copy = {
     latest: 'Latest',
     saved: 'Saved version',
     maximum: 'Select up to 32 game versions',
+    releaseMaximum: `Select up to ${MAX_RELEASE_COMPATIBLE_VERSIONS} game versions`,
     searchPlaceholder: 'Filter versions',
     noMatches: 'No matching game versions',
     allVersions: 'List all versions',
@@ -81,7 +84,8 @@ const copy = {
     minor: 'Minor',
     patch: 'Patch',
     prerelease: 'Pre-release',
-    release: 'Release'
+    release: 'Release',
+    selectedCount: (count: number) => `${count} Version${count === 1 ? '' : 's'} Selected`
   }
 } as const;
 
@@ -147,6 +151,8 @@ export function GameVersionPicker({ value, onChange, ariaLabel, collapsible = fa
   const [query, setQuery] = useState('');
   const [showAllVersions, setShowAllVersions] = useState(false);
   const [open, setOpen] = useState(!collapsible);
+  const selectionLimit = variant === 'tree' ? MAX_RELEASE_COMPATIBLE_VERSIONS : 32;
+  const maximumText = variant === 'tree' ? text.releaseMaximum : text.maximum;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -187,7 +193,7 @@ export function GameVersionPicker({ value, onChange, ariaLabel, collapsible = fa
   const optionMap = useMemo(() => new Map(options.map((option) => [option.value, option])), [options]);
   const listedOptions = useMemo(() => [
     ...options,
-    ...value.filter((version) => !optionMap.has(version)).map((version) => ({ value: version, channel: 'stable' as const, latest: false, saved: true }))
+    ...value.filter((version) => isSupportedGameVersion(version) && !optionMap.has(version)).map((version) => ({ value: version, channel: 'stable' as const, latest: false, saved: true }))
   ], [optionMap, options, value]);
   const visibleOptions = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -214,15 +220,15 @@ export function GameVersionPicker({ value, onChange, ariaLabel, collapsible = fa
       onChange(value.filter((current) => current !== version));
       return;
     }
-    if (value.length < 32) onChange([...value, version]);
-  }, [onChange, value]);
+    if (value.length < selectionLimit) onChange([...value, version]);
+  }, [onChange, selectionLimit, value]);
 
   const renderVersionOption = (option: GameVersionOption & { saved?: boolean }) => {
     const selected = value.includes(option.value);
     const saved = Boolean(option.saved);
-    const disabled = !selected && value.length >= 32;
+    const disabled = !selected && value.length >= selectionLimit;
     return (
-      <button className={selected ? 'game-version-picker__option game-version-picker__option--selected' : 'game-version-picker__option'} key={option.value} type="button" role={collapsible ? 'option' : undefined} disabled={disabled} title={disabled ? text.maximum : undefined} aria-pressed={selected} aria-selected={collapsible ? selected : undefined} onClick={() => toggleVersion(option.value)}>
+      <button className={selected ? 'game-version-picker__option game-version-picker__option--selected' : 'game-version-picker__option'} key={option.value} type="button" role={collapsible ? 'option' : undefined} disabled={disabled} title={disabled ? maximumText : undefined} aria-pressed={selected} aria-selected={collapsible ? selected : undefined} onClick={() => toggleVersion(option.value)}>
         <span className="game-version-picker__value">{option.value}</span>
         <span className={option.channel === 'unstable' ? 'game-version-picker__channel game-version-picker__channel--unstable' : 'game-version-picker__channel'}>{saved ? text.saved : option.channel === 'unstable' ? text.unstable : text.stable}</span>
         {option.latest ? <span className="game-version-picker__latest">{text.latest}</span> : null}
@@ -234,14 +240,12 @@ export function GameVersionPicker({ value, onChange, ariaLabel, collapsible = fa
   const renderTreeLeaf = (leaf: VersionTreeLeaf) => {
     const { option } = leaf;
     const selected = value.includes(option.value);
-    const disabled = !selected && value.length >= 32;
-    const saved = Boolean(option.saved);
-    const prereleaseLabel = leaf.prerelease || text.release;
+    const disabled = !selected && value.length >= selectionLimit;
+    const prereleaseLabel = leaf.prerelease ? `.${leaf.prerelease.replace('.', '-')}` : '\u00a0';
     return (
       <div className="game-version-picker__tree-row game-version-picker__tree-row--leaf" key={option.value}>
         <span className={leaf.prerelease ? 'game-version-picker__tree-label game-version-picker__tree-label--pre' : 'game-version-picker__tree-label game-version-picker__tree-label--release'}>{prereleaseLabel}</span>
-        <button className={selected ? 'game-version-picker__tree-select game-version-picker__tree-select--selected' : 'game-version-picker__tree-select'} type="button" role="option" disabled={disabled} title={disabled ? text.maximum : option.value} aria-label={option.value} aria-pressed={selected} aria-selected={selected} onClick={() => toggleVersion(option.value)}>
-          <span className="game-version-picker__tree-select-meta">{saved ? text.saved : option.channel === 'unstable' ? text.unstable : text.stable}{option.latest ? ` · ${text.latest}` : ''}</span>
+        <button className={selected ? 'game-version-picker__tree-select game-version-picker__tree-select--selected' : 'game-version-picker__tree-select'} type="button" role="option" disabled={disabled} title={disabled ? maximumText : option.value} aria-label={option.value} aria-pressed={selected} aria-selected={selected} onClick={() => toggleVersion(option.value)}>
           <span className="game-version-picker__tree-mark" aria-hidden="true">{selected ? <Check size={13} strokeWidth={2.8} /> : null}</span>
         </button>
       </div>
@@ -254,6 +258,7 @@ export function GameVersionPicker({ value, onChange, ariaLabel, collapsible = fa
         <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={text.searchPlaceholder} aria-label={text.searchPlaceholder} />
       </div>
       <div className="game-version-picker__tree" role="listbox" aria-label={ariaLabel}>
+        <p className="game-version-picker__tree-count">{text.selectedCount(value.length)}</p>
         <div className="game-version-picker__tree-heading" aria-hidden="true"><span>{text.major}</span><span>{text.minor}</span><span>{text.patch}</span><span>{text.prerelease}</span><span /></div>
         <div className="game-version-picker__tree-body">
           {versionTree.tree.map((major) => (

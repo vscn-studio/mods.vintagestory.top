@@ -5718,6 +5718,17 @@ summary:active {
   background: var(--paper-bright);
 }
 
+.game-version-picker__tree-count {
+  margin: 0;
+  padding: 5px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+}
+
 .game-version-picker__tree-heading {
   display: grid;
   grid-template-columns: 42px 48px 50px 76px minmax(68px, 1fr);

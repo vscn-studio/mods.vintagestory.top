@@ -4,6 +4,7 @@ import { actorOrResponse, mutationAllowed, optionalActor } from '@/lib/api-auth'
 import { jsonData, jsonError } from '@/lib/api-errors';
 import { canProjectPermission, canReadProject, effectiveProjectRole, getActiveActor } from '@/lib/authorization';
 import { sanitizeChangelog } from '@/lib/changelog';
+import { MAX_RELEASE_COMPATIBLE_VERSIONS } from '@/lib/game-versions';
 import { findProject, serializeProject } from '@/lib/project-service';
 import { writeAudit } from '@/lib/audit';
 
@@ -13,7 +14,7 @@ type Params = { params: Promise<{ id: string }> };
 const releaseSchema = z.object({
   version: z.string().trim().min(1).max(80).regex(/^v?\d+(?:\.\d+){0,3}(?:[-+][0-9A-Za-z.-]+)?$/),
   changelog: z.string().max(100_000).optional(),
-  compatibleVersions: z.array(z.string().trim().min(1).max(40)).max(32).default([]),
+  compatibleVersions: z.array(z.string().trim().min(1).max(40)).max(MAX_RELEASE_COMPATIBLE_VERSIONS).default([]),
   environments: z.array(z.string().trim().min(1).max(80)).max(16).default([])
 });
 

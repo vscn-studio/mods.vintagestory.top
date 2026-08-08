@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { getDb } from '@/lib/db';
 import { writeAudit } from '@/lib/audit';
 import { sanitizeChangelog } from '@/lib/changelog';
+import { filterSupportedGameVersions } from '@/lib/game-versions';
 import { sanitizeRichText } from '@/lib/rich-text';
 
 export const projectInclude = {
@@ -139,6 +140,7 @@ export async function replaceProjectTaxonomy(
 export function serializeProject(project: FullProject, options?: { includePrivate?: boolean; includeUncleanFiles?: boolean }) {
   const includePrivate = options?.includePrivate === true;
   const includeUncleanFiles = options?.includeUncleanFiles === true;
+  const serializeCompatibleVersions = (value: unknown): string[] => filterSupportedGameVersions(Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []);
   const serializedMembers = project.members.map((member) => ({ id: member.account.id, username: member.account.username, name: member.account.displayName, avatarUrl: member.account.avatarUrl, role: project.ownerAccount?.id === member.account.id ? 'owner' : member.role.toLowerCase() }));
   if (project.ownerAccount && !serializedMembers.some((member) => member.id === project.ownerAccount?.id)) {
     serializedMembers.unshift({ id: project.ownerAccount.id, username: project.ownerAccount.username, name: project.ownerAccount.displayName, avatarUrl: project.ownerAccount.avatarUrl, role: 'owner' });
@@ -164,7 +166,7 @@ export function serializeProject(project: FullProject, options?: { includePrivat
     members: serializedMembers,
     tags: project.tags.map(({ tag }) => ({ slug: tag.slug, name: tag.name, nameEn: tag.nameEn ?? tag.name })),
     categories: project.categories.map(({ category }) => ({ slug: category.slug, name: category.name, nameEn: category.nameEn ?? category.name })),
-    gameVersions: project.gameVersions.map(({ gameVersion }) => gameVersion.value),
+    gameVersions: filterSupportedGameVersions(project.gameVersions.map(({ gameVersion }) => gameVersion.value)),
     environments: project.environments.map(({ environment }) => ({ slug: environment.slug, name: environment.name, nameEn: environment.nameEn ?? environment.name })),
     releases: project.releases
       .filter((release) => includePrivate || release.status === 'PUBLISHED')
@@ -173,7 +175,7 @@ export function serializeProject(project: FullProject, options?: { includePrivat
         version: release.version,
         changelog: sanitizeChangelog(release.changelog),
         status: release.status.toLowerCase(),
-        compatibleVersions: Array.isArray(release.compatibleVersions) ? release.compatibleVersions : [],
+        compatibleVersions: serializeCompatibleVersions(release.compatibleVersions),
         environments: Array.isArray(release.environments) ? release.environments : [],
         publishedAt: release.publishedAt?.toISOString() ?? null,
         updatedAt: release.updatedAt.toISOString(),

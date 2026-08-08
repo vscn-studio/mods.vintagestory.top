@@ -8,6 +8,7 @@ import type { SessionAccountSummary } from '@/lib/auth-server';
 import { type PreviewSection } from '@/lib/preview-sections';
 import { ensureCsrfToken } from '@/lib/client-confirmation';
 import { getLicenseOption } from '@/lib/licenses';
+import { filterSupportedGameVersions } from '@/lib/game-versions';
 
 type ContentPreviewPageProps = {
   kind: 'mod' | 'modpack';
@@ -289,7 +290,7 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
   ].includes(capability)) ?? false;
   const members = current.members ?? [];
   const releases = current.releases ?? [];
-  const compatibleVersions = [...new Set(releases.flatMap((release) => Array.isArray(release.compatibleVersions) ? release.compatibleVersions.filter((value): value is string => typeof value === 'string' && Boolean(value.trim())) : []))];
+  const compatibleVersions = filterSupportedGameVersions(releases.flatMap((release) => Array.isArray(release.compatibleVersions) ? release.compatibleVersions.filter((value): value is string => typeof value === 'string') : []));
   const runtimeEnvironments = current.environments ?? [];
   const sidebarTags = current.tags ?? [];
   const localizedSidebarTags = sidebarTags
@@ -327,8 +328,8 @@ export function ContentPreviewPage({ kind, id, initialSection, sessionAccount = 
   };
   const screenshotCards = current.screenshots ?? [];
   const changelogEntries = releases.filter((release) => release.changelog).map((release) => ({ version: release.version, date: release.publishedAt ?? release.updatedAt, summary: release.changelog ?? '' }));
-  const versionEntries = releases.filter((release) => release.status === 'published').map((release) => ({ version: release.version, game: Array.isArray(release.compatibleVersions) ? release.compatibleVersions.join(' · ') : '', published: release.publishedAt ?? release.updatedAt, updated: release.updatedAt, downloads: release.files.reduce((sum, file) => sum + file.downloads, 0).toLocaleString(), files: release.files }));
-  const gameVersionOptions = [...new Set(releases.flatMap((release) => Array.isArray(release.compatibleVersions) ? release.compatibleVersions.filter((value): value is string => typeof value === 'string') : []))];
+  const versionEntries = releases.filter((release) => release.status === 'published').map((release) => ({ version: release.version, game: filterSupportedGameVersions(Array.isArray(release.compatibleVersions) ? release.compatibleVersions.filter((value): value is string => typeof value === 'string') : []).join(' · '), published: release.publishedAt ?? release.updatedAt, updated: release.updatedAt, downloads: release.files.reduce((sum, file) => sum + file.downloads, 0).toLocaleString(), files: release.files }));
+  const gameVersionOptions = filterSupportedGameVersions(releases.flatMap((release) => Array.isArray(release.compatibleVersions) ? release.compatibleVersions.filter((value): value is string => typeof value === 'string') : []));
   const selectedVersionLabel = selectedVersions.length > 0 ? selectedVersions.join(' · ') : text.allVersions;
   const filteredVersionEntries = selectedVersions.length > 0
     ? versionEntries.filter((entry) => entry.game.split(' · ').some((version) => selectedVersions.includes(version)))

@@ -8,10 +8,11 @@ import { findProject } from '@/lib/project-service';
 import { writeAudit } from '@/lib/audit';
 import { canTransitionRelease } from '@/lib/release-state';
 import { requireConfirmation } from '@/lib/admin-auth';
+import { MAX_RELEASE_COMPATIBLE_VERSIONS } from '@/lib/game-versions';
 
 export const runtime = 'nodejs';
 type Params = { params: Promise<{ id: string }> };
-const updateSchema = z.object({ changelog: z.string().max(100_000).optional(), compatibleVersions: z.array(z.string().max(40)).max(32).optional(), environments: z.array(z.string().max(80)).max(16).optional() });
+const updateSchema = z.object({ changelog: z.string().max(100_000).optional(), compatibleVersions: z.array(z.string().max(40)).max(MAX_RELEASE_COMPATIBLE_VERSIONS).optional(), environments: z.array(z.string().max(80)).max(16).optional() });
 
 async function findRelease(db: NonNullable<ReturnType<typeof import('@/lib/db').getDb>>, id: string) {
   return db.release.findUnique({ where: { id }, include: { project: { include: { members: true, ownerOrganization: { include: { members: true } } } }, files: true } });
